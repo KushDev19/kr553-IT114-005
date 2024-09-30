@@ -1,0 +1,2 @@
+Level,Strikes,Number,MaxLevel,Difficulty
+1,0,9,1,hard
