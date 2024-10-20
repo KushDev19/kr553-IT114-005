@@ -1,4 +1,4 @@
-package Module4.Part3;
+package Module4.Part3HW;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -10,7 +10,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-
 /**
  * Demoing bi-directional communication between client and server in a
  * multi-client scenario
@@ -21,8 +20,8 @@ public class Client {
     private ObjectOutputStream out = null;
     private ObjectInputStream in = null;
     final Pattern ipAddressPattern = Pattern
-            .compile("/connect\\s+(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}:\\d{3,5})");
-    final Pattern localhostPattern = Pattern.compile("/connect\\s+(localhost:\\d{3,5})");
+            .compile("/connect\\s+(\\d{1,3}(\\.\\d{1,3}){3}:\\d{1,5})");
+    final Pattern localhostPattern = Pattern.compile("/connect\\s+(localhost:\\d{1,5})");
     private volatile boolean isRunning = true; // volatile for thread-safe visibility
 
     public Client() {
@@ -58,44 +57,22 @@ public class Client {
             // Use CompletableFuture to run listenToServer() in a separate thread
             CompletableFuture.runAsync(this::listenToServer);
         } catch (UnknownHostException e) {
-            e.printStackTrace();
+            System.out.println("Unknown host: " + address);
+            // e.printStackTrace();
         } catch (IOException e) {
-            e.printStackTrace();
+            System.out.println("Unable to connect to server: " + e.getMessage());
+            // e.printStackTrace();
         }
         return isConnected();
     }
 
-    /**
-     * <p>
-     * Check if the string contains the <i>connect</i> command
-     * followed by an IP address and port or localhost and port.
-     * </p>
-     * <p>
-     * Example format: 123.123.123.123:3000
-     * </p>
-     * <p>
-     * Example format: localhost:3000
-     * </p>
-     * https://www.w3schools.com/java/java_regex.asp
-     * 
-     * @param text
-     * @return true if the text is a valid connection command
-     */
     private boolean isConnection(String text) {
         Matcher ipMatcher = ipAddressPattern.matcher(text);
         Matcher localhostMatcher = localhostPattern.matcher(text);
         return ipMatcher.matches() || localhostMatcher.matches();
     }
 
-    /**
-     * Controller for handling various text commands.
-     * <p>
-     * Add more here as needed
-     * </p>
-     * 
-     * @param text
-     * @return true if the text was a command or triggered a command
-     */
+
     private boolean processClientCommand(String text) {
         if (isConnection(text)) {
             // replaces multiple spaces with a single space
@@ -129,7 +106,7 @@ public class Client {
             while (isRunning && isConnected()) {
                 String fromServer = (String) in.readObject(); // blocking read
                 if (fromServer != null) {
-                    System.out.println("(Server)" + fromServer);
+                    System.out.println("(Server) " + fromServer);
                 } else {
                     System.out.println("Server disconnected");
                     break;
@@ -137,11 +114,11 @@ public class Client {
             }
         } catch (ClassCastException | ClassNotFoundException cce) {
             System.err.println("Error reading object as specified type: " + cce.getMessage());
-            cce.printStackTrace();
+            // cce.printStackTrace();
         } catch (IOException e) {
             if (isRunning) {
                 System.out.println("Connection dropped");
-                e.printStackTrace();
+                // e.printStackTrace();
             }
         } finally {
             closeServerConnection();
@@ -154,21 +131,22 @@ public class Client {
      */
     private void listenToInput() {
         try (Scanner si = new Scanner(System.in)) {
-            System.out.println("Waiting for input"); //moved here to avoid console spam
-            while (isRunning) { // Run until isRunning is false
+            System.out.println("Waiting for input");
+            while (isRunning) {
                 String line = si.nextLine();
                 if (!processClientCommand(line)) {
                     if (isConnected()) {
                         out.writeObject(line);
                         out.flush(); // good practice to ensure data is written out immediately
                     } else {
-                        System.out.println("Not connected to server (hint: type `/connect host:port` without the quotes and replace host/port with the necessary info)");
+                        System.out.println(
+                                "Not connected to server (hint: type `/connect host:port` without the quotes and replace host/port with the necessary info)");
                     }
                 }
             }
         } catch (IOException ioException) {
-            System.out.println("Error in listentToInput()");
-            ioException.printStackTrace();
+            System.out.println("Error in listenToInput()");
+            // ioException.printStackTrace();
         }
         System.out.println("listenToInput thread stopped");
     }
@@ -180,7 +158,6 @@ public class Client {
         isRunning = false;
         closeServerConnection();
         System.out.println("Client terminated");
-        // System.exit(0); // Terminate the application
     }
 
     /**
@@ -193,7 +170,7 @@ public class Client {
                 out.close();
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            // e.printStackTrace();
         }
         try {
             if (in != null) {
@@ -201,7 +178,7 @@ public class Client {
                 in.close();
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            // e.printStackTrace();
         }
         try {
             if (server != null) {
@@ -210,7 +187,7 @@ public class Client {
                 System.out.println("Closed socket");
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            // e.printStackTrace();
         }
     }
 
@@ -220,7 +197,7 @@ public class Client {
             client.start();
         } catch (IOException e) {
             System.out.println("Exception from main()");
-            e.printStackTrace();
+            // e.printStackTrace();
         }
     }
 }
