@@ -1,5 +1,4 @@
-package Module5.Part5;
-
+package Project;
 public enum PayloadType {
     CLIENT_CONNECT, // client requesting to connect to server (passing of initialization data [name])
     CLIENT_ID,  // server sending client id

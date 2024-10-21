@@ -1,4 +1,4 @@
-package Module5.Part5;
+package Project;
 
 public class ConnectionPayload extends Payload {
     private String clientName;

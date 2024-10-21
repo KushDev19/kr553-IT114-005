@@ -1,4 +1,4 @@
-package Module5.Part5;
+package Project;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -11,7 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import Module5.Part5.TextFX.Color;
+import Project.TextFX.Color;
 
 /**
  * Demoing bi-directional communication between client and server in a
