@@ -7,13 +7,15 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public enum Server {
     INSTANCE;
-
+    //kr553 10/20/2024
     private int port = 3000;
     // Use ConcurrentHashMap for thread-safe room management
     private final ConcurrentHashMap<String, Room> rooms = new ConcurrentHashMap<>();
     private boolean isRunning = true;
     private long nextClientId = 1;
 
+
+    //kr553 10/21/2024
     private Server(){
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             System.out.println("JVM is shutting down. Perform cleanup tasks.");
@@ -51,6 +53,7 @@ public enum Server {
     /**
      * Gracefully disconnect clients
      */
+    //kr553 10/21/2024
     private void shutdown() {
         try {
             //chose removeIf over forEach to avoid potential ConcurrentModificationException
@@ -105,6 +108,8 @@ public enum Server {
      * @param client the client moving
      * @return true if the move was successful, false otherwise
      */
+
+     //kr553 10/20/2024
     protected boolean joinRoom(String name, ServerThread client) {
         final String nameCheck = name.toLowerCase();
         if (!rooms.containsKey(nameCheck)) {

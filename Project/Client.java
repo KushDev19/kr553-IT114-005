@@ -63,6 +63,8 @@ public enum Client {
      * @param port
      * @return true if connection was successful
      */
+
+      //kr553 10/20/2024
     private boolean connect(String address, int port) {
         try {
             server = new Socket(address, port);
@@ -97,6 +99,8 @@ public enum Client {
      * @param text
      * @return true if the text is a valid connection command
      */
+
+     //kr553 10/20/2024
     private boolean isConnection(String text) {
         Matcher ipMatcher = ipAddressPattern.matcher(text);
         Matcher localhostMatcher = localhostPattern.matcher(text);
@@ -260,6 +264,8 @@ public enum Client {
     /**
      * Listens for messages from the server
      */
+
+     //kr553 10/20/2024
     private void listenToServer() {
         try {
             while (isRunning && isConnected()) {
@@ -289,6 +295,8 @@ public enum Client {
     /**
      * Listens for keyboard input from the user
      */
+
+     //kr553 10/20/2024
     private void listenToInput() {
         try (Scanner si = new Scanner(System.in)) {
             System.out.println("Waiting for input"); // moved here to avoid console spam
@@ -368,6 +376,8 @@ public enum Client {
      * 
      * @param payload
      */
+
+     //kr553 10/20/2024
     private void processPayload(Payload payload) {
         try {
             System.out.println("Received Payload: " + payload);
@@ -421,6 +431,7 @@ public enum Client {
         }
     }
 
+    //kr553 10/20/2024
     private void processMessage(long clientId, String message) {
         String name = knownClients.containsKey(clientId) ? knownClients.get(clientId).getClientName() : "Room";
         System.out.println(TextFX.colorize(String.format("%s: %s", name, message), Color.BLUE));
