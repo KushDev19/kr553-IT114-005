@@ -4,10 +4,12 @@ public class ConnectionPayload extends Payload {
     private String clientName;
     private boolean isConnect;
 
-    public ConnectionPayload(){
+    public ConnectionPayload() {
         setPayloadType(PayloadType.CLIENT_CONNECT);
+        setTimestamp(System.currentTimeMillis());
     }
-    
+
+    // Getter and Setter for clientName
     public String getClientName() {
         return clientName;
     }
@@ -16,6 +18,7 @@ public class ConnectionPayload extends Payload {
         this.clientName = clientName;
     }
 
+    // Getter and Setter for isConnect
     public boolean isConnect() {
         return isConnect;
     }
@@ -24,10 +27,11 @@ public class ConnectionPayload extends Payload {
         this.isConnect = isConnect;
     }
 
-    
-
     @Override
-    public String toString(){
-        return super.toString() + String.format(" Client Name [%s] Status [%s]", clientName, isConnect?"connect":"disconnect");
+    public String toString() {
+        return super.toString() + String.format(
+            " [ConnectionPayload] Client Name: %s, Status: %s",
+            clientName, isConnect ? "connect" : "disconnect"
+        );
     }
 }

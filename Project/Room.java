@@ -1,5 +1,6 @@
 package Project;
 
+import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class Room implements AutoCloseable{
@@ -21,6 +22,53 @@ public class Room implements AutoCloseable{
 
     public String getName() {
         return this.name;
+    }
+
+    public void processRollCommand(ServerThread client, RollPayload payload) {
+        String resultMessage = "";
+        Random rand = new Random();
+
+        if (payload.getNumberOfDice() > 0 && payload.getSidesPerDie() > 0) {
+            // Format: /roll #d#
+            int total = 0;
+            StringBuilder rolls = new StringBuilder();
+            for (int i = 0; i < payload.getNumberOfDice(); i++) {
+                int roll = rand.nextInt(payload.getSidesPerDie()) + 1; // Random number between 1 and sidesPerDie
+                total += roll;
+                rolls.append(roll);
+                if (i < payload.getNumberOfDice() - 1) {
+                    rolls.append(", ");
+                }
+            }
+            resultMessage = String.format("%s rolled %dd%d and got %d (%s)",
+                    client.getClientName(),
+                    payload.getNumberOfDice(),
+                    payload.getSidesPerDie(),
+                    total,
+                    rolls.toString());
+        } else if (payload.getRollRange() > 0) {
+            // Format: /roll #
+            int roll = rand.nextInt(payload.getRollRange()) + 1; // Random number between 1 and rollRange
+            resultMessage = String.format("%s rolled %d and got %d",
+                    client.getClientName(),
+                    payload.getRollRange(),
+                    roll);
+        } else {
+            // Invalid roll parameters
+            resultMessage = String.format("%s attempted an invalid roll command.", client.getClientName());
+        }
+
+        // Broadcast the result to all clients in the room
+        sendMessage(null, resultMessage);
+    }
+
+    public void processFlipCommand(ServerThread client) {
+        Random rand = new Random();
+        String result = rand.nextBoolean() ? "heads" : "tails";
+        String resultMessage = String.format("%s flipped a coin and got %s", client.getClientName(), result);
+
+        // Broadcast the result to all clients in the room
+        sendMessage(null, resultMessage);
     }
 
     protected synchronized void addClient(ServerThread client) {
@@ -186,20 +234,19 @@ public class Room implements AutoCloseable{
      */
     //kr553 10/21/2024
     protected synchronized void sendMessage(ServerThread sender, String message) {
-        if (!isRunning) { // block action if Room isn't running
+        if (!isRunning) {
             return;
         }
-
-        // Note: any desired changes to the message must be done before this section
+    
+        // Apply text formatting
+        String formattedMessage = TextFX.formatText(message);
+    
         long senderId = sender == null ? ServerThread.DEFAULT_CLIENT_ID : sender.getClientId();
-
-        // loop over clients and send out the message; remove client if message failed
-        // to be sent
-        // Note: this uses a lambda expression for each item in the values() collection,
-        // it's one way we can safely remove items during iteration
-        info(String.format("sending message to %s recipients: %s", getName(), clientsInRoom.size(), message));
+    
+        info(String.format("sending message to %s recipients: %s", clientsInRoom.size(), formattedMessage));
+    
         clientsInRoom.values().removeIf(client -> {
-            boolean failedToSend = !client.sendMessage(senderId, message);
+            boolean failedToSend = !client.sendMessage(senderId, formattedMessage);
             if (failedToSend) {
                 info(String.format("Removing disconnected client[%s] from list", client.getClientId()));
                 disconnect(client);
@@ -207,6 +254,8 @@ public class Room implements AutoCloseable{
             return failedToSend;
         });
     }
+    
+    
     // end send data to client(s)
 
     // receive data from ServerThread

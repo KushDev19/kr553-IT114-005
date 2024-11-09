@@ -14,6 +14,7 @@ public class ServerThread extends BaseServerThread {
     private long clientId;
     private String clientName;
     private Consumer<ServerThread> onInitializationComplete; // callback to inform when this object is ready
+    
 
     /**
      * Wraps the Socket connection and takes a Server reference and a callback
@@ -41,7 +42,8 @@ public class ServerThread extends BaseServerThread {
         this.clientName = name;
         onInitialized();
     }
-    public String getClientName(){
+
+    public String getClientName() {
         return clientName;
     }
 
@@ -75,14 +77,32 @@ public class ServerThread extends BaseServerThread {
         currentRoom = null;
         super.cleanup();
     }
-    
+
     @Override
-    protected void disconnect(){
-        //sendDisconnect(clientId, clientName);
+    protected void disconnect() {
+        // sendDisconnect(clientId, clientName);
         super.disconnect();
     }
+
+    private void processRollPayload(RollPayload payload) {
+        if (currentRoom != null) {
+            currentRoom.processRollCommand(this, payload);
+        } else {
+            System.out.println("No room assigned to process roll command.");
+        }
+    }
+
+    private void processFlipPayload(Payload payload) {
+        if (currentRoom != null) {
+            currentRoom.processFlipCommand(this);
+        } else {
+            System.out.println("No room assigned to process flip command.");
+        }
+    }
+    
+
     // handle received message from the Client
-    //kr553 10/20/2024
+    // kr553 10/20/2024
     @Override
     protected void processPayload(Payload payload) {
         try {
@@ -103,7 +123,14 @@ public class ServerThread extends BaseServerThread {
                 case DISCONNECT:
                     currentRoom.disconnect(this);
                     break;
+                case ROLL:
+                    processRollPayload((RollPayload) payload);
+                    break;
+                case FLIP:
+                    processFlipPayload(payload);
+                    break;
                 default:
+                    System.out.println("Unhandled payload type: " + payload.getPayloadType());
                     break;
             }
         } catch (Exception e) {
@@ -114,7 +141,7 @@ public class ServerThread extends BaseServerThread {
 
     // send methods to pass data back to the Client
 
-    public boolean sendClientSync(long clientId, String clientName){
+    public boolean sendClientSync(long clientId, String clientName) {
         ConnectionPayload cp = new ConnectionPayload();
         cp.setClientId(clientId);
         cp.setClientName(clientName);
@@ -141,7 +168,7 @@ public class ServerThread extends BaseServerThread {
      * @return @see {@link #send(Payload)}
      */
 
-     //kr553 10/20/2024
+    // kr553 10/20/2024
     public boolean sendMessage(long senderId, String message) {
         Payload p = new Payload();
         p.setClientId(senderId);
@@ -162,7 +189,7 @@ public class ServerThread extends BaseServerThread {
     public boolean sendRoomAction(long clientId, String clientName, String room, boolean isJoin) {
         ConnectionPayload cp = new ConnectionPayload();
         cp.setPayloadType(PayloadType.ROOM_JOIN);
-        cp.setConnect(isJoin); //<-- determine if join or leave
+        cp.setConnect(isJoin); // <-- determine if join or leave
         cp.setMessage(room);
         cp.setClientId(clientId);
         cp.setClientName(clientName);
@@ -176,7 +203,7 @@ public class ServerThread extends BaseServerThread {
      * @param clientName their name
      * @return success of sending the payload
      */
-    //kr553 10/21/2024
+    // kr553 10/21/2024
     public boolean sendDisconnect(long clientId, String clientName) {
         ConnectionPayload cp = new ConnectionPayload();
         cp.setPayloadType(PayloadType.DISCONNECT);
