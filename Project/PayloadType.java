@@ -9,5 +9,8 @@ public enum PayloadType {
     ROOM_JOIN,      // join/leave room based on boolean
     MESSAGE,        // sender and message
     ROLL,           // new type for roll command
-    FLIP            // new type for flip command
+    FLIP,          // new type for flip command
+    PRIVATE_MESSAGE, // new type for private messages
+    MUTE,           
+    UNMUTE
 }

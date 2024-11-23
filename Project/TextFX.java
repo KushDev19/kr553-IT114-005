@@ -1,5 +1,7 @@
 package Project;
 
+import Project.TextFX.Color;
+
 /**
  * Utility to provide colored and formatted text in the terminal.
  * Important: This may not satisfy the text formatting feature/requirement for chatroom projects if HTML rendering is needed.
@@ -16,6 +18,7 @@ public abstract class TextFX {
         YELLOW("\033[0;33m"),
         BLUE("\033[0;34m"),
         PURPLE("\033[0;35m"),
+        MAGENTA("\033[0;35m"),
         CYAN("\033[0;36m"),
         WHITE("\033[0;37m");
 
@@ -47,6 +50,15 @@ public abstract class TextFX {
     public static String colorize(String text, Color color) {
         return color.getCode() + text + RESET;
     }
+
+    public static String formatFlipResult(String senderName, String result) {
+        return colorize(String.format("[Flip] %s flipped a coin: %s", senderName, result), Color.YELLOW);
+    }
+    
+    public static String formatRollResult(String senderName, int total, String details) {
+        return colorize(String.format("[Roll] %s rolled: %d (%s)", senderName, total, details), Color.CYAN);
+    }
+    
 
     /**
      * Formats text with bold, italic, underline, and color tags based on markdown-style symbols.

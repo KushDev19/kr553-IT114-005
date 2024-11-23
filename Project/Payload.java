@@ -3,11 +3,12 @@ package Project;
 import java.io.Serializable;
 
 public class Payload implements Serializable {
-    private PayloadType payloadType;
-    private long clientId;
-    private String message;
-    private String senderName;
-    private long timestamp; // Unix timestamp in milliseconds
+    private PayloadType payloadType; // The type of the payload
+    private long clientId;           // ID of the sender client
+    private long targetClientId;     // ID of the target client (e.g., for mute/unmute)
+    private String message;          // Message content
+    private String senderName;       // Name of the sender
+    private long timestamp;          // Unix timestamp in milliseconds
 
     // Getter and Setter for payloadType
     public PayloadType getPayloadType() {
@@ -18,8 +19,6 @@ public class Payload implements Serializable {
         this.payloadType = payloadType;
     }
 
-    
-
     // Getter and Setter for clientId
     public long getClientId() {
         return clientId;
@@ -27,6 +26,15 @@ public class Payload implements Serializable {
 
     public void setClientId(long clientId) {
         this.clientId = clientId;
+    }
+
+    // Getter and Setter for targetClientId
+    public long getTargetClientId() {
+        return targetClientId;
+    }
+
+    public void setTargetClientId(long targetClientId) {
+        this.targetClientId = targetClientId;
     }
 
     // Getter and Setter for message
@@ -59,8 +67,8 @@ public class Payload implements Serializable {
     @Override
     public String toString() {
         return String.format(
-            "Payload [Type: %s, Client ID: %s, Sender: %s, Timestamp: %s, Message: %s]",
-            getPayloadType(), getClientId(), getSenderName(), getTimestamp(), getMessage()
+            "Payload [Type: %s, Client ID: %s, Sender: %s, Target: %s, Timestamp: %s, Message: %s]",
+            getPayloadType(), getClientId(), getSenderName(), getTargetClientId(), getTimestamp(), getMessage()
         );
     }
 }

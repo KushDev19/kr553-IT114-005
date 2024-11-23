@@ -3,12 +3,12 @@ package Project;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class Room implements AutoCloseable{
-    private String name;// unique name of the Room
+public class Room implements AutoCloseable {
+    private String name; // Unique name of the Room
     private volatile boolean isRunning = false;
-    private ConcurrentHashMap<Long, ServerThread> clientsInRoom = new ConcurrentHashMap<Long, ServerThread>();
+    private ConcurrentHashMap<Long, ServerThread> clientsInRoom = new ConcurrentHashMap<>();
 
-    public final static String LOBBY = "lobby";
+    public static final String LOBBY = "lobby";
 
     private void info(String message) {
         System.out.println(String.format("Room[%s]: %s", name, message));
@@ -24,6 +24,7 @@ public class Room implements AutoCloseable{
         return this.name;
     }
 
+    // kr553 11/9/2024
     public void processRollCommand(ServerThread client, RollPayload payload) {
         String resultMessage = "";
         Random rand = new Random();
@@ -59,20 +60,20 @@ public class Room implements AutoCloseable{
         }
 
         // Broadcast the result to all clients in the room
-        sendMessage(null, resultMessage);
+        sendMessage(client, resultMessage); // 'sender' is null because it's a server-generated message
     }
 
     public void processFlipCommand(ServerThread client) {
         Random rand = new Random();
         String result = rand.nextBoolean() ? "heads" : "tails";
         String resultMessage = String.format("%s flipped a coin and got %s", client.getClientName(), result);
-
+    
         // Broadcast the result to all clients in the room
-        sendMessage(null, resultMessage);
+        sendMessage(client, resultMessage); // Pass 'client' instead of 'null'
     }
 
     protected synchronized void addClient(ServerThread client) {
-        if (!isRunning) { // block action if Room isn't running
+        if (!isRunning) { // Block action if Room isn't running
             return;
         }
         if (clientsInRoom.containsKey(client.getClientId())) {
@@ -82,50 +83,45 @@ public class Room implements AutoCloseable{
         clientsInRoom.put(client.getClientId(), client);
         client.setCurrentRoom(this);
 
-        // notify clients of someone joining
+        // Notify clients of someone joining
         sendRoomStatus(client.getClientId(), client.getClientName(), true);
-        // sync room state to joiner
+        // Sync room state to joiner
         syncRoomList(client);
 
         info(String.format("%s[%s] joined the Room[%s]", client.getClientName(), client.getClientId(), getName()));
-
     }
 
-    //kr553 10/21/2024
+    // kr553 10/21/2024
     protected synchronized void removedClient(ServerThread client) {
-        if (!isRunning) { // block action if Room isn't running
+        if (!isRunning) { // Block action if Room isn't running
             return;
         }
-        // notify remaining clients of someone leaving
-        // happen before removal so leaving client gets the data
+        // Notify remaining clients of someone leaving
         sendRoomStatus(client.getClientId(), client.getClientName(), false);
         clientsInRoom.remove(client.getClientId());
 
         info(String.format("%s[%s] left the room", client.getClientName(), client.getClientId(), getName()));
 
         autoCleanup();
-
     }
 
     /**
-     * Takes a ServerThread and removes them from the Server
+     * Takes a ServerThread and removes them from the Server.
      * Adding the synchronized keyword ensures that only one thread can execute
-     * these methods at a time,
-     * preventing concurrent modification issues and ensuring thread safety
+     * these methods at a time, preventing concurrent modification issues and ensuring thread safety.
      * 
-     * @param client
+     * @param client The client to disconnect.
      */
-    //kr553 10/21/2024
+    // kr553 10/21/2024
     protected synchronized void disconnect(ServerThread client) {
-        if (!isRunning) { // block action if Room isn't running
+        if (!isRunning) { // Block action if Room isn't running
             return;
         }
         long id = client.getClientId();
         sendDisconnect(client);
         client.disconnect();
-        // removedClient(client); // <-- use this just for normal room leaving
         clientsInRoom.remove(client.getClientId());
-        
+
         // Improved logging with user data
         info(String.format("%s[%s] disconnected", client.getClientName(), id));
     }
@@ -143,7 +139,45 @@ public class Room implements AutoCloseable{
     }
 
     /**
-     * Attempts to close the room to free up resources if it's empty
+     * Sends a private message between two users in the room.
+     */
+    protected synchronized void sendPrivateMessage(ServerThread sender, long targetClientId, String message) {
+        if (!isRunning) {
+            return;
+        }
+
+        ServerThread targetClient = clientsInRoom.get(targetClientId);
+
+        if (targetClient != null) {
+            // Apply text formatting
+            String formattedMessage = TextFX.formatText(message);
+
+            long senderId = sender.getClientId();
+
+            // Send the message to sender and receiver
+            boolean failedToSendSender = !sender.sendPrivateMessage(senderId, formattedMessage);
+            boolean failedToSendReceiver = !targetClient.sendPrivateMessage(senderId, formattedMessage);
+
+            if (failedToSendSender) {
+                info(String.format("Removing disconnected client[%s] from list", sender.getClientId()));
+                disconnect(sender);
+            }
+            if (failedToSendReceiver) {
+                info(String.format("Removing disconnected client[%s] from list", targetClient.getClientId()));
+                disconnect(targetClient);
+            }
+
+            // Log the private message (optional)
+            info(String.format("Private message from %s to %s: %s", sender.getClientName(), targetClient.getClientName(), message));
+        } else {
+            // Target client not found in the room
+            // Optionally, send an error message back to the sender
+            sender.sendMessage(String.format("User with ID '%d' not found in the room.", targetClientId));
+        }
+    }
+
+    /**
+     * Attempts to close the room to free up resources if it's empty.
      */
     private void autoCleanup() {
         if (!Room.LOBBY.equalsIgnoreCase(name) && clientsInRoom.isEmpty()) {
@@ -151,48 +185,42 @@ public class Room implements AutoCloseable{
         }
     }
 
+    @Override
     public void close() {
-        // attempt to gracefully close and migrate clients
+        // Attempt to gracefully close and migrate clients
         if (!clientsInRoom.isEmpty()) {
             sendMessage(null, "Room is shutting down, migrating to lobby");
-            info(String.format("migrating %s clients", name, clientsInRoom.size()));
-            clientsInRoom.values().removeIf(client -> {
-                Server.INSTANCE.joinRoom(Room.LOBBY, client);
-                return true;
-            });
+            info(String.format("Migrating %d clients", clientsInRoom.size()));
+            clientsInRoom.values().forEach(client -> Server.INSTANCE.joinRoom(Room.LOBBY, client));
+            clientsInRoom.clear();
         }
         Server.INSTANCE.removeRoom(this);
         isRunning = false;
-        clientsInRoom.clear();
-        info(String.format("closed", name));
+        info(String.format("Room[%s] closed", name));
     }
 
-    // send/sync data to client(s)
+    // Send/sync data to client(s)
 
     /**
-     * Sends to all clients details of a disconnect client
-     * @param client
+     * Sends to all clients details of a disconnected client.
      */
-    //kr553 10/21/2024
+    // kr553 10/21/2024
     protected synchronized void sendDisconnect(ServerThread client) {
-        info(String.format("sending disconnect status to %s recipients", getName(), clientsInRoom.size()));
+        info(String.format("Sending disconnect status to %d recipients", clientsInRoom.size()));
         clientsInRoom.values().removeIf(clientInRoom -> {
             boolean failedToSend = !clientInRoom.sendDisconnect(client.getClientId(), client.getClientName());
             if (failedToSend) {
-                info(String.format("Removing disconnected client[%s] from list", client.getClientId()));
-                disconnect(client);
+                info(String.format("Removing disconnected client[%s] from list", clientInRoom.getClientId()));
+                disconnect(clientInRoom);
             }
             return failedToSend;
         });
     }
 
     /**
-     * Syncs info of existing users in room with the client
-     * 
-     * @param client
+     * Syncs info of existing users in room with the client.
      */
     protected synchronized void syncRoomList(ServerThread client) {
-
         clientsInRoom.values().forEach(clientInRoom -> {
             if (clientInRoom.getClientId() != client.getClientId()) {
                 client.sendClientSync(clientInRoom.getClientId(), clientInRoom.getClientName());
@@ -201,14 +229,10 @@ public class Room implements AutoCloseable{
     }
 
     /**
-     * Syncs room status of one client to all connected clients
-     * 
-     * @param clientId
-     * @param clientName
-     * @param isConnect
+     * Syncs room status of one client to all connected clients.
      */
     protected synchronized void sendRoomStatus(long clientId, String clientName, boolean isConnect) {
-        info(String.format("sending room status to %s recipients", getName(), clientsInRoom.size()));
+        info(String.format("Sending room status to %d recipients", clientsInRoom.size()));
         clientsInRoom.values().removeIf(client -> {
             boolean failedToSend = !client.sendRoomAction(clientId, clientName, getName(), isConnect);
             if (failedToSend) {
@@ -220,56 +244,50 @@ public class Room implements AutoCloseable{
     }
 
     /**
-     * Sends a basic String message from the sender to all connectedClients
-     * Internally calls processCommand and evaluates as necessary.
-     * Note: Clients that fail to receive a message get removed from
-     * connectedClients.
-     * Adding the synchronized keyword ensures that only one thread can execute
-     * these methods at a time,
-     * preventing concurrent modification issues and ensuring thread safety
-     * 
-     * @param message
-     * @param sender  ServerThread (client) sending the message or null if it's a
-     *                server-generated message
+     * Sends a message from the sender to all clients in the room.
+     * If the sender is null, it's considered a server message.
      */
-    //kr553 10/21/2024
+    // kr553 10/21/2024
     protected synchronized void sendMessage(ServerThread sender, String message) {
         if (!isRunning) {
             return;
         }
     
-        // Apply text formatting
         String formattedMessage = TextFX.formatText(message);
-    
         long senderId = sender == null ? ServerThread.DEFAULT_CLIENT_ID : sender.getClientId();
     
-        info(String.format("sending message to %s recipients: %s", clientsInRoom.size(), formattedMessage));
+        for (ServerThread client : clientsInRoom.values()) {
+            if (client.isMuted(senderId)) {
+                continue; // Skip sending the message to this client
+            }
     
-        clientsInRoom.values().removeIf(client -> {
-            boolean failedToSend = !client.sendMessage(senderId, formattedMessage);
-            if (failedToSend) {
+            boolean messageSent = client.sendMessage(senderId, formattedMessage);
+    
+            if (!messageSent) {
                 info(String.format("Removing disconnected client[%s] from list", client.getClientId()));
                 disconnect(client);
             }
-            return failedToSend;
-        });
+        }
     }
     
     
-    // end send data to client(s)
 
-    // receive data from ServerThread
-    protected void handleCreateRoom(ServerThread sender, String room) {
-        if (Server.INSTANCE.createRoom(room)) {
-            Server.INSTANCE.joinRoom(room, sender);
+    // End send data to client(s)
+
+    // Receive data from ServerThread
+
+    protected void handleCreateRoom(ServerThread sender, String roomName) {
+        if (Server.INSTANCE.createRoom(roomName)) {
+            Server.INSTANCE.joinRoom(roomName, sender);
+            sender.sendMessage("Room '" + roomName + "' created successfully and you joined.");
         } else {
-            sender.sendMessage(String.format("Room %s already exists", room));
+            sender.sendMessage("Room '" + roomName + "' already exists.");
         }
     }
 
     protected void handleJoinRoom(ServerThread sender, String room) {
         if (!Server.INSTANCE.joinRoom(room, sender)) {
-            sender.sendMessage(String.format("Room %s doesn't exist", room));
+            sender.sendMessage(String.format("Room '%s' doesn't exist.", room));
         }
     }
 
@@ -277,5 +295,5 @@ public class Room implements AutoCloseable{
         disconnect(sender);
     }
 
-    // end receive data from ServerThread
+    // End receive data from ServerThread
 }

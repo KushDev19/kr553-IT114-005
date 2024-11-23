@@ -10,8 +10,10 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
+import javax.swing.JOptionPane;
+import javax.swing.SwingUtilities;
 import Project.TextFX.Color;
+import Project.ChatRoomPanel;
 
 /**
  * Demoing bi-directional communication between client and server in a
@@ -40,12 +42,77 @@ public enum Client {
     private final String SINGLE_SPACE = " ";
     private final String ROLL = "roll";
     private final String FLIP = "flip";
-
+    private ChatRoomPanel chatRoomPanel;
 
     // needs to be private now that the enum logic is handling this
     private Client() {
         System.out.println("Client Created");
         myData = new ClientData();
+    }
+
+    public void setChatRoomPanel(ChatRoomPanel panel) {
+        this.chatRoomPanel = panel;
+    }
+
+    public void sendMessageToServer(String message) {
+        if (isConnected()) {
+            if (message.startsWith("/")) {
+                // Handle commands
+                if (!processClientCommand(message)) {
+                    // If not a valid command, you can choose to send it as a message or notify the
+                    // user
+                    System.out.println(TextFX.colorize("Invalid command.", Color.RED));
+                }
+            } else if (message.startsWith("@")) {
+                // Handle private message
+                handlePrivateMessage(message);
+            } else {
+                // Regular message
+                sendMessage(message);
+            }
+        } else {
+            // Optionally, inform the user that they're not connected
+            JOptionPane.showMessageDialog(null, "Not connected to server.", "Connection Error",
+                    JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void handlePrivateMessage(String message) {
+        String[] parts = message.split("\\s+", 2);
+        if (parts.length >= 1) {
+            String targetUsername = parts[0].substring(1); // Remove '@'
+            String privateMessage = parts.length == 2 ? parts[1] : "";
+            // Find the client ID of the target username
+            Long targetClientId = null;
+            for (ClientData cd : knownClients.values()) {
+                if (cd.getClientName().equals(targetUsername)) {
+                    targetClientId = cd.getClientId();
+                    break;
+                }
+            }
+            if (targetClientId != null) {
+                // Send private message payload
+                PrivateMessagePayload p = new PrivateMessagePayload();
+                p.setPayloadType(PayloadType.PRIVATE_MESSAGE);
+                p.setClientId(myData.getClientId());
+                p.setTargetClientId(targetClientId);
+                p.setMessage(privateMessage);
+                send(p);
+            } else {
+                // Target user not found
+                JOptionPane.showMessageDialog(null, "User '" + targetUsername + "' not found.", "Error",
+                        JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+
+    public boolean connectToServer(String host, int port, String username) {
+        boolean connected = connect(host, port);
+        if (connected) {
+            myData.setClientName(username);
+            sendClientName();
+        }
+        return connected;
     }
 
     public boolean isConnected() {
@@ -67,7 +134,7 @@ public enum Client {
      * @return true if connection was successful
      */
 
-      //kr553 10/20/2024
+    // kr553 10/20/2024
     private boolean connect(String address, int port) {
         try {
             server = new Socket(address, port);
@@ -105,7 +172,7 @@ public enum Client {
      * @return true if the text is a valid connection command
      */
 
-     //kr553 10/20/2024
+    // kr553 10/20/2024
     private boolean isConnection(String text) {
         Matcher ipMatcher = ipAddressPattern.matcher(text);
         Matcher localhostMatcher = localhostPattern.matcher(text);
@@ -122,61 +189,112 @@ public enum Client {
      * @return true if the text was a command or triggered a command
      */
     private boolean processClientCommand(String text) {
-        if (isConnection(text)) {
-            // Handle /connect command
-            return handleConnectCommand(text);
-        } else if ("/quit".equalsIgnoreCase(text)) {
-            // Existing quit handling code...
-            sendDisconnect();
-            return true;
-        } else if (text.startsWith("/name")) {
-            // Existing name handling code...
-            return handleNameCommand(text);
-        } else if (text.equalsIgnoreCase("/users")) {
-            // Existing users handling code...
-            // Implement if needed
-            System.out.println("User list feature not implemented yet.");
-            return true;
-        } else {
-            if (text.startsWith(COMMAND_CHARACTER)) {
-                boolean wasCommand = false;
-                String fullCommand = text.substring(1); // Remove leading '/'
-                String[] commandParts = fullCommand.split(SINGLE_SPACE, 2); // Limit to 2 parts
-                final String command = commandParts[0];
-                final String commandValue = commandParts.length >= 2 ? commandParts[1] : "";
-                switch (command.toLowerCase()) {
-                    case CREATE_ROOM:
-                        sendCreateRoom(commandValue);
-                        wasCommand = true;
-                        break;
-                    case JOIN_ROOM:
-                        sendJoinRoom(commandValue);
-                        wasCommand = true;
-                        break;
-                    case DISCONNECT:
-                    case LOGOFF:
-                    case LOGOUT:
-                        sendDisconnect();
-                        wasCommand = true;
-                        break;
-                    case ROLL:
-                        processRollCommand(commandValue);
-                        wasCommand = true;
-                        break;
-                    case FLIP:
-                        processFlipCommand();
-                        wasCommand = true;
-                        break;
-                    default:
-                        System.out.println(TextFX.colorize("Unknown command: " + command, Color.RED));
-                        wasCommand = true;
-                        break;
-                }
-                return wasCommand;
+        if (text.startsWith("/")) { // All commands start with '/'
+            String[] parts = text.split("\\s+", 2);
+            String command = parts[0].substring(1).toLowerCase(); // Remove leading '/' and make lowercase
+            String argument = parts.length > 1 ? parts[1] : "";
+
+            switch (command) {
+                case "createroom":
+                    if (!argument.isEmpty()) {
+                        sendCreateRoom(argument);
+                    } else {
+                        System.out.println(TextFX.colorize("Usage: /createroom <room_name>", Color.RED));
+                    }
+                    return true;
+
+                case "joinroom":
+                    if (!argument.isEmpty()) {
+                        sendJoinRoom(argument);
+                    } else {
+                        System.out.println(TextFX.colorize("Usage: /joinroom <room_name>", Color.RED));
+                    }
+                    return true;
+                case "mute":
+                    if (!argument.isEmpty()) {
+                        sendMuteRequest(argument);
+                    } else {
+                        System.out.println(TextFX.colorize("Usage: /mute <username>", Color.RED));
+                    }
+                    return true;
+
+                case "unmute":
+                    if (!argument.isEmpty()) {
+                        sendUnmuteRequest(argument);
+                    } else {
+                        System.out.println(TextFX.colorize("Usage: /unmute <username>", Color.RED));
+                    }
+                    return true;
+
+                case "quit":
+                case "disconnect":
+                case "logoff":
+                case "logout":
+                    sendDisconnect();
+                    return true;
+
+                case "name":
+                    return handleNameCommand(text);
+
+                case "users":
+                    System.out.println("User list feature not implemented yet.");
+                    return true;
+
+                case "roll":
+                    processRollCommand(argument);
+                    return true;
+
+                case "flip":
+                    processFlipCommand();
+                    return true;
+
+                default:
+                    System.out.println(TextFX.colorize("Unknown command: " + command, Color.RED));
+                    return true;
             }
         }
-        return false;
+        return false; 
     }
+
+    private void sendMuteRequest(String username) {
+        Long targetClientId = getClientIdByUsername(username);
+        if (targetClientId != null) {
+            Payload p = new Payload();
+            p.setPayloadType(PayloadType.MUTE);
+            p.setClientId(myData.getClientId());
+            p.setMessage(username); // Include the username for reference
+            p.setTargetClientId(targetClientId); // You may need to add this field to Payload class
+            send(p);
+            System.out.println(TextFX.colorize("You have muted " + username, Color.YELLOW));
+        } else {
+            System.out.println(TextFX.colorize("User '" + username + "' not found.", Color.RED));
+        }
+    }
+    
+    private void sendUnmuteRequest(String username) {
+        Long targetClientId = getClientIdByUsername(username);
+        if (targetClientId != null) {
+            Payload p = new Payload();
+            p.setPayloadType(PayloadType.UNMUTE);
+            p.setClientId(myData.getClientId());
+            p.setMessage(username); // Include the username for reference
+            p.setTargetClientId(targetClientId); // You may need to add this field to Payload class
+            send(p);
+            System.out.println(TextFX.colorize("You have unmuted " + username, Color.YELLOW));
+        } else {
+            System.out.println(TextFX.colorize("User '" + username + "' not found.", Color.RED));
+        }
+    }
+    
+    private Long getClientIdByUsername(String username) {
+        for (ClientData cd : knownClients.values()) {
+            if (cd.getClientName().equalsIgnoreCase(username)) {
+                return cd.getClientId();
+            }
+        }
+        return null;
+    }
+    
 
     /**
      * Handles the /connect command to establish a connection to the server.
@@ -238,36 +356,40 @@ public enum Client {
         return true;
     }
 
+    // kr553 11/9/2024
     private void processRollCommand(String commandValue) {
         commandValue = commandValue.trim();
         RollPayload rollPayload = new RollPayload();
         rollPayload.setSenderName(myData.getClientName());
         rollPayload.setClientId(myData.getClientId());
-
-        if (commandValue.matches("\\d+")) { // Format 1: /roll #
-            int rollRange = Integer.parseInt(commandValue);
-            rollPayload.setRollRange(rollRange);
-        } else if (commandValue.matches("\\d+d\\d+")) { // Format 2: /roll #d#
+    
+        if (commandValue.matches("\\d+")) { // Single number (e.g., /roll 6)
+            rollPayload.setRollRange(Integer.parseInt(commandValue));
+        } else if (commandValue.matches("\\d+d\\d+")) { // Dice notation (e.g., /roll 2d6)
             String[] parts = commandValue.split("d");
-            int numberOfDice = Integer.parseInt(parts[0]);
-            int sidesPerDie = Integer.parseInt(parts[1]);
-            rollPayload.setNumberOfDice(numberOfDice);
-            rollPayload.setSidesPerDie(sidesPerDie);
+            rollPayload.setNumberOfDice(Integer.parseInt(parts[0]));
+            rollPayload.setSidesPerDie(Integer.parseInt(parts[1]));
         } else {
-            System.out.println(TextFX.colorize("Invalid /roll command format.", Color.RED));
+            System.out.println(TextFX.colorize("Invalid /roll command format.", TextFX.Color.RED));
             return;
         }
-
+    
         send(rollPayload);
+        System.out.println(TextFX.colorize("Roll command sent successfully!", TextFX.Color.GREEN));
     }
+    
 
+    // kr553 11/9/2024
     private void processFlipCommand() {
         Payload flipPayload = new Payload();
         flipPayload.setPayloadType(PayloadType.FLIP);
         flipPayload.setSenderName(myData.getClientName());
         flipPayload.setClientId(myData.getClientId());
+    
         send(flipPayload);
+        System.out.println(TextFX.colorize("Flip command sent successfully!", TextFX.Color.GREEN));
     }
+    
 
     // send methods to pass data to the ServerThread
 
@@ -276,11 +398,15 @@ public enum Client {
      * 
      * @param room
      */
-    private void sendCreateRoom(String room) {
-        Payload p = new Payload();
-        p.setPayloadType(PayloadType.ROOM_CREATE);
-        p.setMessage(room);
-        send(p);
+    private void sendCreateRoom(String roomName) {
+        if (roomName == null || roomName.trim().isEmpty()) {
+            System.out.println(TextFX.colorize("Room name cannot be empty.", Color.RED));
+            return;
+        }
+        Payload payload = new Payload();
+        payload.setPayloadType(PayloadType.ROOM_CREATE);
+        payload.setMessage(roomName);
+        send(payload);
     }
 
     /**
@@ -335,7 +461,7 @@ public enum Client {
      * @param p
      */
     private void send(Payload p) {
-        try { 
+        try {
             out.writeObject(p);
             out.flush();
         } catch (IOException e) {
@@ -343,7 +469,7 @@ public enum Client {
             e.printStackTrace();
         }
     }
-    
+
     // end send methods
 
     public void start() throws IOException {
@@ -360,7 +486,7 @@ public enum Client {
      * Listens for messages from the server
      */
 
-     //kr553 10/20/2024
+    // kr553 10/20/2024
     private void listenToServer() {
         try {
             while (isRunning && isConnected()) {
@@ -391,7 +517,7 @@ public enum Client {
      * Listens for keyboard input from the user
      */
 
-     //kr553 10/20/2024
+    // kr553 10/20/2024
     private void listenToInput() {
         try (Scanner si = new Scanner(System.in)) {
             System.out.println("Waiting for input"); // moved here to avoid console spam
@@ -474,13 +600,16 @@ public enum Client {
      * @param payload
      */
 
-     //kr553 10/20/2024
+    // kr553 10/20/2024
     private void processPayload(Payload payload) {
         try {
             switch (payload.getPayloadType()) {
                 case PayloadType.CLIENT_ID: // get id assigned
                     ConnectionPayload cp = (ConnectionPayload) payload;
                     processClientData(cp.getClientId(), cp.getClientName());
+                    break;
+                case PayloadType.PRIVATE_MESSAGE:
+                    processPrivateMessage(payload.getClientId(), payload.getMessage());
                     break;
                 case PayloadType.SYNC_CLIENT: // silent add
                     cp = (ConnectionPayload) payload;
@@ -509,6 +638,21 @@ public enum Client {
 
     // payload processors
 
+    private void processPrivateMessage(long clientId, String message) {
+        String name = knownClients.containsKey(clientId) ? knownClients.get(clientId).getClientName() : "Unknown";
+        String formattedMessage = TextFX.formatText(message);
+        String displayMessage = String.format("[Private] %s: %s", name, formattedMessage);
+
+        // Update chat history in the UI
+        if (chatRoomPanel != null) {
+            SwingUtilities.invokeLater(
+                    () -> chatRoomPanel.appendChatMessageWithColor(displayMessage, java.awt.Color.MAGENTA));
+        } else {
+            // Fallback to console output
+            System.out.println(TextFX.colorize(displayMessage, Color.MAGENTA)); // Use magenta for private messages
+        }
+    }
+
     private void processDisconnect(long clientId, String clientName) {
         System.out.println(
                 TextFX.colorize(String.format("*%s disconnected*",
@@ -527,11 +671,41 @@ public enum Client {
         }
     }
 
-    //kr553 10/20/2024
+    // kr553 10/20/2024
     private void processMessage(long clientId, String message) {
-        String name = knownClients.containsKey(clientId) ? knownClients.get(clientId).getClientName() : "Room";
-        String formattedMessage = TextFX.formatText(message);
-        System.out.println(TextFX.colorize(String.format("%s: %s", name, formattedMessage), Color.BLUE));
+        String name;
+        if (clientId == ServerThread.DEFAULT_CLIENT_ID) {
+            name = ""; // Or set to "Server" if you prefer
+        } else {
+            name = knownClients.containsKey(clientId) ? knownClients.get(clientId).getClientName() : "Unknown";
+        }
+    
+        String formattedMessage;
+        if (name.isEmpty()) {
+            formattedMessage = TextFX.formatText(message);
+        } else {
+            formattedMessage = String.format("%s: %s", name, TextFX.formatText(message));
+        }
+    
+        // Determine the color for the message
+        final java.awt.Color messageColor;
+        if (name.equalsIgnoreCase(myData.getClientName())) {
+            messageColor = java.awt.Color.BLUE; // Blue for the current user's messages
+        } else if (message.contains("[Private]")) {
+            messageColor = java.awt.Color.MAGENTA; // Magenta for private messages
+        } else if (name.isEmpty()) {
+            messageColor = java.awt.Color.BLACK; // Black for system messages
+        } else {
+            messageColor = java.awt.Color.GREEN; // Green for other users' messages
+        }
+    
+        // Update the chat history in the UI
+        if (chatRoomPanel != null) {
+            SwingUtilities.invokeLater(() -> chatRoomPanel.appendChatMessageWithColor(formattedMessage, messageColor));
+        } else {
+            // Fallback to console output
+            System.out.println(formattedMessage);
+        }
     }
     
 
@@ -550,22 +724,43 @@ public enum Client {
             cd.setClientId(clientId);
             cd.setClientName(clientName);
             knownClients.put(clientId, cd);
-            System.out.println(TextFX
-                    .colorize(String.format("*%s[%s] joined the Room %s*", clientName, clientId, message),
-                            Color.GREEN));
+            String joinMessage = String.format("*%s[%s] joined the Room %s*", clientName, clientId, message);
+
+            // Append the join message to chat history
+            if (chatRoomPanel != null) {
+                SwingUtilities
+                        .invokeLater(() -> chatRoomPanel.appendChatMessageWithColor(joinMessage, java.awt.Color.GREEN));
+            } else {
+                System.out.println(joinMessage);
+            }
         } else if (!isJoin) {
             ClientData removed = knownClients.remove(clientId);
             if (removed != null) {
-                System.out.println(
-                        TextFX.colorize(String.format("*%s[%s] left the Room %s*", clientName, clientId, message),
-                                Color.YELLOW));
+                String leaveMessage = String.format("*%s[%s] left the Room %s*", clientName, clientId, message);
+
+                // Append the leave message to chat history
+                if (chatRoomPanel != null) {
+                    SwingUtilities.invokeLater(
+                            () -> chatRoomPanel.appendChatMessageWithColor(leaveMessage, java.awt.Color.YELLOW));
+                } else {
+                    System.out.println(leaveMessage);
+                }
             }
-            //clear our list
-            if(clientId == myData.getClientId()){
+            // Clear our list if we left
+            if (clientId == myData.getClientId()) {
                 knownClients.clear();
             }
         }
-    }
-    // end payload processors
 
+        // Update the user list in the UI
+        if (chatRoomPanel != null) {
+            java.util.List<String> userNames = new java.util.ArrayList<>();
+            for (ClientData cd : knownClients.values()) {
+                userNames.add(cd.getClientName());
+            }
+            SwingUtilities.invokeLater(() -> chatRoomPanel.updateUserList(userNames));
+        }
+    }
+
+    // end payload processors
 }

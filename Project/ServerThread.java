@@ -1,7 +1,9 @@
 package Project;
 
 import java.net.Socket;
+import java.util.HashSet;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Consumer;
 
 /**
@@ -14,13 +16,14 @@ public class ServerThread extends BaseServerThread {
     private long clientId;
     private String clientName;
     private Consumer<ServerThread> onInitializationComplete; // callback to inform when this object is ready
-    
+
+    // Set to store client IDs that this client has muted
+    private Set<Long> mutedClientIds = new HashSet<>();
 
     /**
      * Wraps the Socket connection and takes a Server reference and a callback
      * 
      * @param myClient
-     * @param server
      * @param onInitializationComplete method to inform listener that this object is
      *                                 ready
      */
@@ -30,9 +33,8 @@ public class ServerThread extends BaseServerThread {
         info("ServerThread created");
         // get communication channels to single client
         this.client = myClient;
-        this.clientId = ServerThread.DEFAULT_CLIENT_ID;// this is updated later by the server
+        this.clientId = ServerThread.DEFAULT_CLIENT_ID; // this is updated later by the server
         this.onInitializationComplete = onInitializationComplete;
-
     }
 
     public void setClientName(String name) {
@@ -84,6 +86,7 @@ public class ServerThread extends BaseServerThread {
         super.disconnect();
     }
 
+    // kr553 11/9/2024
     private void processRollPayload(RollPayload payload) {
         if (currentRoom != null) {
             currentRoom.processRollCommand(this, payload);
@@ -99,7 +102,6 @@ public class ServerThread extends BaseServerThread {
             System.out.println("No room assigned to process flip command.");
         }
     }
-    
 
     // handle received message from the Client
     // kr553 10/20/2024
@@ -110,6 +112,9 @@ public class ServerThread extends BaseServerThread {
                 case CLIENT_CONNECT:
                     ConnectionPayload cp = (ConnectionPayload) payload;
                     setClientName(cp.getClientName());
+                    break;
+                case PRIVATE_MESSAGE:
+                    processPrivateMessagePayload((PrivateMessagePayload) payload);
                     break;
                 case MESSAGE:
                     currentRoom.sendMessage(this, payload.getMessage());
@@ -129,6 +134,12 @@ public class ServerThread extends BaseServerThread {
                 case FLIP:
                     processFlipPayload(payload);
                     break;
+                case MUTE:
+                    handleMute(payload);
+                    break;
+                case UNMUTE:
+                    handleUnmute(payload);
+                    break;
                 default:
                     System.out.println("Unhandled payload type: " + payload.getPayloadType());
                     break;
@@ -139,7 +150,42 @@ public class ServerThread extends BaseServerThread {
         }
     }
 
+    // Muting functionality
+    private void handleMute(Payload payload) {
+        long targetClientId = payload.getTargetClientId();
+        mutedClientIds.add(targetClientId);
+        // Optionally, send confirmation to the client
+        sendMessage("You have muted " + payload.getMessage());
+    }
+
+    private void handleUnmute(Payload payload) {
+        long targetClientId = payload.getTargetClientId();
+        mutedClientIds.remove(targetClientId);
+        // Optionally, send confirmation to the client
+        sendMessage("You have unmuted " + payload.getMessage());
+    }
+
+    public boolean isMuted(long clientId) {
+        return mutedClientIds.contains(clientId);
+    }
+
     // send methods to pass data back to the Client
+
+    private void processPrivateMessagePayload(PrivateMessagePayload payload) {
+        if (currentRoom != null) {
+            currentRoom.sendPrivateMessage(this, payload.getTargetClientId(), payload.getMessage());
+        } else {
+            System.out.println("No room assigned to process private message.");
+        }
+    }
+
+    public boolean sendPrivateMessage(long senderId, String message) {
+        PrivateMessagePayload p = new PrivateMessagePayload();
+        p.setClientId(senderId);
+        p.setMessage(message);
+        p.setPayloadType(PayloadType.PRIVATE_MESSAGE);
+        return send(p);
+    }
 
     public boolean sendClientSync(long clientId, String clientName) {
         ConnectionPayload cp = new ConnectionPayload();
@@ -183,7 +229,7 @@ public class ServerThread extends BaseServerThread {
      * @param clientId   their unique identifier
      * @param clientName their name
      * @param room       the room
-     * @param isJoin     true for join, false for leaivng
+     * @param isJoin     true for join, false for leaving
      * @return success of sending the payload
      */
     public boolean sendRoomAction(long clientId, String clientName, String room, boolean isJoin) {
