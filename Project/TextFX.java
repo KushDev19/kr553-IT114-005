@@ -1,153 +1,107 @@
 package Project;
 
-import Project.TextFX.Color;
+import Project.TextFX.TextColor;
 
 /**
- * Utility to provide colored and formatted text in the terminal.
- * Important: This may not satisfy the text formatting feature/requirement for chatroom projects if HTML rendering is needed.
+ * Utility to provide TextColored and formatted text in the GUI using HTML.
  */
 public abstract class TextFX {
 
     /**
-     * Enum representing available text colors using ANSI escape codes.
+     * Enum representing available text TextColors using HTML TextColor codes.
      */
-    public enum Color {
-        BLACK("\033[0;30m"),
-        RED("\033[0;31m"),
-        GREEN("\033[0;32m"),
-        YELLOW("\033[0;33m"),
-        BLUE("\033[0;34m"),
-        PURPLE("\033[0;35m"),
-        MAGENTA("\033[0;35m"),
-        CYAN("\033[0;36m"),
-        WHITE("\033[0;37m");
-
+    public enum TextColor {
+        BLACK("black", java.awt.Color.BLACK),
+        RED("red", java.awt.Color.RED),
+        GREEN("green", java.awt.Color.GREEN),
+        YELLOW("yellow", java.awt.Color.YELLOW),
+        BLUE("blue", java.awt.Color.BLUE),
+        MAGENTA("magenta", java.awt.Color.MAGENTA),
+        CYAN("cyan", java.awt.Color.CYAN),
+        WHITE("white", java.awt.Color.WHITE);
+    
         private final String code;
-
-        Color(String code) {
+        private final java.awt.Color awtColor;
+    
+        TextColor(String code, java.awt.Color awtColor) {
             this.code = code;
+            this.awtColor = awtColor;
         }
-
-        /**
-         * Retrieves the ANSI code for the color.
-         *
-         * @return ANSI code as a String.
-         */
+    
         public String getCode() {
             return code;
         }
+    
+        public java.awt.Color getAwtColor() {
+            return awtColor;
+        }
     }
-
-    public static final String RESET = "\033[0m";
+    
+    
 
     /**
-     * Applies the specified color to the input text.
+     * Applies the specified TextColor to the input text using HTML span.
      *
-     * @param text  The text to colorize.
-     * @param color The color to apply.
-     * @return The colorized text.
+     * @param text  The text to TextColorize.
+     * @param TextColor The TextColor to apply.
+     * @return The TextColorized text with HTML span.
      */
-    public static String colorize(String text, Color color) {
-        return color.getCode() + text + RESET;
+    public static String TextColorize(String text, TextColor TextColor) {
+        return "<span style='TextColor:" + TextColor.getCode() + ";'>" + text + "</span>";
     }
 
     public static String formatFlipResult(String senderName, String result) {
-        return colorize(String.format("[Flip] %s flipped a coin: %s", senderName, result), Color.YELLOW);
+        return TextColorize(String.format("[Flip] %s flipped a coin: %s", escapeHTML(senderName), escapeHTML(result)),
+                TextColor.YELLOW);
     }
-    
+
     public static String formatRollResult(String senderName, int total, String details) {
-        return colorize(String.format("[Roll] %s rolled: %d (%s)", senderName, total, details), Color.CYAN);
+        return TextColorize(String.format("[Roll] %s rolled: %d (%s)", escapeHTML(senderName), total, escapeHTML(details)),
+                TextColor.CYAN);
     }
-    
 
     /**
-     * Formats text with bold, italic, underline, and color tags based on markdown-style symbols.
+     * Formats text with bold, italic, underline, and TextColor tags based on
+     * markdown-style symbols.
      *
      * @param text Text to format.
-     * @return Formatted text string.
+     * @return Formatted text string with HTML tags.
      */
     public static String formatText(String text) {
         if (text == null || text.isEmpty()) {
             return text;
         }
-
+    
         // Applying formatting in stages while preserving existing tags.
-
-        // Step 1: Process color tags (#r, #g, #b)
-        text = text.replaceAll("#r(.*?)r#", "\033[0;31m$1\033[0m"); // Red
-        text = text.replaceAll("#g(.*?)g#", "\033[0;32m$1\033[0m"); // Green
-        text = text.replaceAll("#b(.*?)b#", "\033[0;34m$1\033[0m"); // Blue
-
-        // Step 2: Apply bold, italic, and underline formatting in a way that allows nesting.
-        // Note that to handle nested styles properly, use non-greedy quantifiers.
-        text = text.replaceAll("\\*\\*(.+?)\\*\\*", "\033[1m$1\033[22m");  // Bold
-        text = text.replaceAll("\\*(.+?)\\*", "\033[3m$1\033[23m");        // Italic
-        text = text.replaceAll("_(.+?)_", "\033[4m$1\033[24m");            // Underline
-
+    
+        // Step 1: Apply bold, italic, and underline formatting
+        text = text.replaceAll("\\*\\*(.+?)\\*\\*", "<b>$1</b>");    // Bold
+        text = text.replaceAll("\\*(.+?)\\*", "<i>$1</i>");          // Italic
+        text = text.replaceAll("_(.+?)_", "<u>$1</u>");              // Underline
+    
+        // Step 2: Process color tags (#r, #g, #b)
+        text = text.replaceAll("#r(.*?)r#", "<span style='color:red;'>$1</span>");    // Red
+        text = text.replaceAll("#g(.*?)g#", "<span style='color:green;'>$1</span>");  // Green
+        text = text.replaceAll("#b(.*?)b#", "<span style='color:blue;'>$1</span>");   // Blue
+    
+        // Step 3: Escape HTML special characters in the remaining text
+        
+    
         return text;
     }
+    
+    
 
     /**
-     * Makes the text bold using ANSI escape codes.
+     * Escapes HTML special characters in the text to prevent HTML injection.
      *
-     * @param text The text to make bold.
-     * @return The bolded text.
+     * @param text The text to escape.
+     * @return The escaped text.
      */
-    public static String bold(String text) {
-        return "\033[1m" + text + RESET;
-    }
-
-    /**
-     * Underlines the text using ANSI escape codes.
-     *
-     * @param text The text to underline.
-     * @return The underlined text.
-     */
-    public static String underline(String text) {
-        return "\033[4m" + text + RESET;
-    }
-
-    /**
-     * Makes the text bold and underlined using ANSI escape codes.
-     *
-     * @param text The text to format.
-     * @return The bold and underlined text.
-     */
-    public static String boldUnderline(String text) {
-        return "\033[1;4m" + text + RESET;
-    }
-
-    /**
-     * Applies color and bold formatting to the text.
-     *
-     * @param text  The text to format.
-     * @param color The color to apply.
-     * @return The formatted text.
-     */
-    public static String boldColor(String text, Color color) {
-        return color.getCode() + "\033[1m" + text + RESET;
-    }
-
-    /**
-     * Applies color and underline formatting to the text.
-     *
-     * @param text  The text to format.
-     * @param color The color to apply.
-     * @return The formatted text.
-     */
-    public static String underlineColor(String text, Color color) {
-        return color.getCode() + "\033[4m" + text + RESET;
-    }
-
-    /**
-     * Applies bold, underline, and color formatting to the text.
-     *
-     * @param text  The text to format.
-     * @param color The color to apply.
-     * @return The formatted text.
-     */
-    public static String boldUnderlineColor(String text, Color color) {
-        return color.getCode() + "\033[1;4m" + text + RESET;
+    public static String escapeHTML(String text) {
+        return text.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;");
     }
 
     /**
@@ -157,7 +111,7 @@ public abstract class TextFX {
      */
     public static void main(String[] args) {
         // Example usage:
-        System.out.println(TextFX.colorize("Hello, world!", Color.RED));
+        System.out.println(TextFX.TextColorize("Hello, world!", TextColor.RED));
         System.out.println(TextFX.formatText("This is **bold** text."));
         System.out.println(TextFX.formatText("This is *italic* text."));
         System.out.println(TextFX.formatText("This is _underlined_ text."));

@@ -9,11 +9,11 @@ import java.net.Socket;
  * Base class the handles the underlying connection between Client and Server-side
  */
 public abstract class BaseServerThread extends Thread {
-    
+
     protected boolean isRunning = false; // control variable to stop this thread
     protected ObjectOutputStream out; // exposed here for send()
     protected Socket client; // communication directly to "my" client
-    
+
     /**
      * A wrapper method so we don't need to keep typing out the long/complex sysout
      * line inside
@@ -55,7 +55,7 @@ public abstract class BaseServerThread extends Thread {
             return false;
         }
     }
-    
+
     /**
      * One of the two ways to get this to exit the listen loop
      */
@@ -124,7 +124,7 @@ public abstract class BaseServerThread extends Thread {
         } catch (IOException e) {
             info("Client already closed");
         }
-        
+
         info("ServerThread cleanup() end");
     }
 }

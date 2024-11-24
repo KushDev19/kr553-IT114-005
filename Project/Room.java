@@ -67,7 +67,7 @@ public class Room implements AutoCloseable {
         Random rand = new Random();
         String result = rand.nextBoolean() ? "heads" : "tails";
         String resultMessage = String.format("%s flipped a coin and got %s", client.getClientName(), result);
-    
+
         // Broadcast the result to all clients in the room
         sendMessage(client, resultMessage); // Pass 'client' instead of 'null'
     }
@@ -252,25 +252,25 @@ public class Room implements AutoCloseable {
         if (!isRunning) {
             return;
         }
-    
+
         String formattedMessage = TextFX.formatText(message);
         long senderId = sender == null ? ServerThread.DEFAULT_CLIENT_ID : sender.getClientId();
-    
+
         for (ServerThread client : clientsInRoom.values()) {
             if (client.isMuted(senderId)) {
                 continue; // Skip sending the message to this client
             }
-    
+
             boolean messageSent = client.sendMessage(senderId, formattedMessage);
-    
+
             if (!messageSent) {
                 info(String.format("Removing disconnected client[%s] from list", client.getClientId()));
                 disconnect(client);
             }
         }
     }
-    
-    
+
+
 
     // End send data to client(s)
 

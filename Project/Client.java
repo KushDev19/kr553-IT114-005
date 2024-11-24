@@ -12,8 +12,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
-import Project.TextFX.Color;
 import Project.ChatRoomPanel;
+import Project.TextFX;
 
 /**
  * Demoing bi-directional communication between client and server in a
@@ -61,7 +61,7 @@ public enum Client {
                 if (!processClientCommand(message)) {
                     // If not a valid command, you can choose to send it as a message or notify the
                     // user
-                    System.out.println(TextFX.colorize("Invalid command.", Color.RED));
+                    System.out.println(TextFX.TextColorize("Invalid command.", TextFX.TextColor.RED));
                 }
             } else if (message.startsWith("@")) {
                 // Handle private message
@@ -77,6 +77,7 @@ public enum Client {
         }
     }
 
+    //kr553 11/23/2024
     private void handlePrivateMessage(String message) {
         String[] parts = message.split("\\s+", 2);
         if (parts.length >= 1) {
@@ -199,7 +200,7 @@ public enum Client {
                     if (!argument.isEmpty()) {
                         sendCreateRoom(argument);
                     } else {
-                        System.out.println(TextFX.colorize("Usage: /createroom <room_name>", Color.RED));
+                        System.out.println(TextFX.TextColorize("Usage: /createroom <room_name>", TextFX.TextColor.RED));
                     }
                     return true;
 
@@ -207,14 +208,14 @@ public enum Client {
                     if (!argument.isEmpty()) {
                         sendJoinRoom(argument);
                     } else {
-                        System.out.println(TextFX.colorize("Usage: /joinroom <room_name>", Color.RED));
+                        System.out.println(TextFX.TextColorize("Usage: /joinroom <room_name>", TextFX.TextColor.RED));
                     }
                     return true;
                 case "mute":
                     if (!argument.isEmpty()) {
                         sendMuteRequest(argument);
                     } else {
-                        System.out.println(TextFX.colorize("Usage: /mute <username>", Color.RED));
+                        System.out.println(TextFX.TextColorize("Usage: /mute <username>", TextFX.TextColor.RED));
                     }
                     return true;
 
@@ -222,7 +223,7 @@ public enum Client {
                     if (!argument.isEmpty()) {
                         sendUnmuteRequest(argument);
                     } else {
-                        System.out.println(TextFX.colorize("Usage: /unmute <username>", Color.RED));
+                        System.out.println(TextFX.TextColorize("Usage: /unmute <username>", TextFX.TextColor.RED));
                     }
                     return true;
 
@@ -249,11 +250,11 @@ public enum Client {
                     return true;
 
                 default:
-                    System.out.println(TextFX.colorize("Unknown command: " + command, Color.RED));
+                    System.out.println(TextFX.TextColorize("Unknown command: " + command, TextFX.TextColor.RED));
                     return true;
             }
         }
-        return false; 
+        return false;
     }
 
     private void sendMuteRequest(String username) {
@@ -265,12 +266,12 @@ public enum Client {
             p.setMessage(username); // Include the username for reference
             p.setTargetClientId(targetClientId); // You may need to add this field to Payload class
             send(p);
-            System.out.println(TextFX.colorize("You have muted " + username, Color.YELLOW));
+            System.out.println(TextFX.TextColorize("You have muted " + username, TextFX.TextColor.YELLOW));
         } else {
-            System.out.println(TextFX.colorize("User '" + username + "' not found.", Color.RED));
+            System.out.println(TextFX.TextColorize("User '" + username + "' not found.", TextFX.TextColor.RED));
         }
     }
-    
+
     private void sendUnmuteRequest(String username) {
         Long targetClientId = getClientIdByUsername(username);
         if (targetClientId != null) {
@@ -280,12 +281,12 @@ public enum Client {
             p.setMessage(username); // Include the username for reference
             p.setTargetClientId(targetClientId); // You may need to add this field to Payload class
             send(p);
-            System.out.println(TextFX.colorize("You have unmuted " + username, Color.YELLOW));
+            System.out.println(TextFX.TextColorize("You have unmuted " + username, TextFX.TextColor.YELLOW));
         } else {
-            System.out.println(TextFX.colorize("User '" + username + "' not found.", Color.RED));
+            System.out.println(TextFX.TextColorize("User '" + username + "' not found.", TextFX.TextColor.RED));
         }
     }
-    
+
     private Long getClientIdByUsername(String username) {
         for (ClientData cd : knownClients.values()) {
             if (cd.getClientName().equalsIgnoreCase(username)) {
@@ -294,7 +295,6 @@ public enum Client {
         }
         return null;
     }
-    
 
     /**
      * Handles the /connect command to establish a connection to the server.
@@ -306,13 +306,17 @@ public enum Client {
         // Extract the address and port
         String[] parts = text.split("\\s+");
         if (parts.length != 2) {
-            System.out.println(TextFX.colorize("Invalid /connect command format. Use: /connect host:port", Color.RED));
+            System.out.println(
+                    TextFX.TextColorize("Invalid /connect command format. Use: /connect host:port",
+                            TextFX.TextColor.RED));
             return true;
         }
         String hostPort = parts[1];
         String[] hostPortParts = hostPort.split(":");
         if (hostPortParts.length != 2) {
-            System.out.println(TextFX.colorize("Invalid /connect command format. Use: /connect host:port", Color.RED));
+            System.out.println(
+                    TextFX.TextColorize("Invalid /connect command format. Use: /connect host:port",
+                            TextFX.TextColor.RED));
             return true;
         }
         String host = hostPortParts[0];
@@ -320,15 +324,16 @@ public enum Client {
         try {
             port = Integer.parseInt(hostPortParts[1]);
         } catch (NumberFormatException e) {
-            System.out.println(TextFX.colorize("Invalid port number.", Color.RED));
+            System.out.println(TextFX.TextColorize("Invalid port number.", TextFX.TextColor.RED));
             return true;
         }
 
         boolean connected = connect(host, port);
         if (connected) {
-            System.out.println(TextFX.colorize("Successfully connected to " + host + ":" + port, Color.GREEN));
+            System.out.println(
+                    TextFX.TextColorize("Successfully connected to " + host + ":" + port, TextFX.TextColor.GREEN));
         } else {
-            System.out.println(TextFX.colorize("Failed to connect to " + host + ":" + port, Color.RED));
+            System.out.println(TextFX.TextColorize("Failed to connect to " + host + ":" + port, TextFX.TextColor.RED));
         }
         return true;
     }
@@ -342,17 +347,18 @@ public enum Client {
     private boolean handleNameCommand(String text) {
         String[] parts = text.split("\\s+", 2);
         if (parts.length != 2) {
-            System.out.println(TextFX.colorize("Invalid /name command format. Use: /name yourName", Color.RED));
+            System.out.println(
+                    TextFX.TextColorize("Invalid /name command format. Use: /name yourName", TextFX.TextColor.RED));
             return true;
         }
         String name = parts[1].trim();
         if (name.isEmpty()) {
-            System.out.println(TextFX.colorize("Name cannot be empty.", Color.RED));
+            System.out.println(TextFX.TextColorize("Name cannot be empty.", TextFX.TextColor.RED));
             return true;
         }
         myData.setClientName(name);
         sendClientName();
-        System.out.println(TextFX.colorize("Name set to: " + name, Color.GREEN));
+        System.out.println(TextFX.TextColorize("Name set to: " + name, TextFX.TextColor.GREEN));
         return true;
     }
 
@@ -362,7 +368,7 @@ public enum Client {
         RollPayload rollPayload = new RollPayload();
         rollPayload.setSenderName(myData.getClientName());
         rollPayload.setClientId(myData.getClientId());
-    
+
         if (commandValue.matches("\\d+")) { // Single number (e.g., /roll 6)
             rollPayload.setRollRange(Integer.parseInt(commandValue));
         } else if (commandValue.matches("\\d+d\\d+")) { // Dice notation (e.g., /roll 2d6)
@@ -370,14 +376,13 @@ public enum Client {
             rollPayload.setNumberOfDice(Integer.parseInt(parts[0]));
             rollPayload.setSidesPerDie(Integer.parseInt(parts[1]));
         } else {
-            System.out.println(TextFX.colorize("Invalid /roll command format.", TextFX.Color.RED));
+            System.out.println(TextFX.TextColorize("Invalid /roll command format.", TextFX.TextColor.RED));
             return;
         }
-    
+
         send(rollPayload);
-        System.out.println(TextFX.colorize("Roll command sent successfully!", TextFX.Color.GREEN));
+        System.out.println(TextFX.TextColorize("Roll command sent successfully!", TextFX.TextColor.GREEN));
     }
-    
 
     // kr553 11/9/2024
     private void processFlipCommand() {
@@ -385,11 +390,10 @@ public enum Client {
         flipPayload.setPayloadType(PayloadType.FLIP);
         flipPayload.setSenderName(myData.getClientName());
         flipPayload.setClientId(myData.getClientId());
-    
+
         send(flipPayload);
-        System.out.println(TextFX.colorize("Flip command sent successfully!", TextFX.Color.GREEN));
+        System.out.println(TextFX.TextColorize("Flip command sent successfully!", TextFX.TextColor.GREEN));
     }
-    
 
     // send methods to pass data to the ServerThread
 
@@ -400,7 +404,7 @@ public enum Client {
      */
     private void sendCreateRoom(String roomName) {
         if (roomName == null || roomName.trim().isEmpty()) {
-            System.out.println(TextFX.colorize("Room name cannot be empty.", Color.RED));
+            System.out.println(TextFX.TextColorize("Room name cannot be empty.", TextFX.TextColor.RED));
             return;
         }
         Payload payload = new Payload();
@@ -447,7 +451,7 @@ public enum Client {
      */
     private void sendClientName() {
         if (myData.getClientName() == null || myData.getClientName().length() == 0) {
-            System.out.println(TextFX.colorize("Name must be set first via /name command", Color.RED));
+            System.out.println(TextFX.TextColorize("Name must be set first via /name command", TextFX.TextColor.RED));
             return;
         }
         ConnectionPayload cp = new ConnectionPayload();
@@ -465,7 +469,7 @@ public enum Client {
             out.writeObject(p);
             out.flush();
         } catch (IOException e) {
-            System.out.println(TextFX.colorize("Failed to send message to server.", Color.RED));
+            System.out.println(TextFX.TextColorize("Failed to send message to server.", TextFX.TextColor.RED));
             e.printStackTrace();
         }
     }
@@ -495,7 +499,7 @@ public enum Client {
                     // System.out.println(fromServer);
                     processPayload(fromServer);
                 } else {
-                    System.out.println(TextFX.colorize("Server disconnected.", Color.RED));
+                    System.out.println(TextFX.TextColorize("Server disconnected.", TextFX.TextColor.RED));
                     break;
                 }
             }
@@ -504,7 +508,7 @@ public enum Client {
             cce.printStackTrace();
         } catch (IOException e) {
             if (isRunning) {
-                System.out.println(TextFX.colorize("Connection dropped.", Color.RED));
+                System.out.println(TextFX.TextColorize("Connection dropped.", TextFX.TextColor.RED));
                 e.printStackTrace();
             }
         } finally {
@@ -528,14 +532,14 @@ public enum Client {
                         sendMessage(line);
                     } else {
                         System.out.println(
-                                TextFX.colorize(
+                                TextFX.TextColorize(
                                         "Not connected to server (hint: type `/connect host:port` without the quotes and replace host/port with the necessary info)",
-                                        Color.YELLOW));
+                                        TextFX.TextColor.YELLOW));
                     }
                 }
             }
         } catch (Exception e) {
-            System.out.println(TextFX.colorize("Error in listenToInput()", Color.RED));
+            System.out.println(TextFX.TextColorize("Error in listenToInput()", TextFX.TextColor.RED));
             e.printStackTrace();
         }
         System.out.println("listenToInput thread stopped");
@@ -547,7 +551,7 @@ public enum Client {
     private void close() {
         isRunning = false;
         closeServerConnection();
-        System.out.println(TextFX.colorize("Client terminated.", Color.YELLOW));
+        System.out.println(TextFX.TextColorize("Client terminated.", TextFX.TextColor.YELLOW));
         // System.exit(0); // Terminate the application
     }
 
@@ -589,7 +593,7 @@ public enum Client {
         try {
             client.start();
         } catch (IOException e) {
-            System.out.println(TextFX.colorize("Exception from main()", Color.RED));
+            System.out.println(TextFX.TextColorize("Exception from main()", TextFX.TextColor.RED));
             e.printStackTrace();
         }
     }
@@ -631,7 +635,7 @@ public enum Client {
                     break;
             }
         } catch (Exception e) {
-            System.out.println(TextFX.colorize("Could not process Payload: " + payload, Color.RED));
+            System.out.println(TextFX.TextColorize("Could not process Payload: " + payload, TextFX.TextColor.RED));
             e.printStackTrace();
         }
     }
@@ -649,19 +653,20 @@ public enum Client {
                     () -> chatRoomPanel.appendChatMessageWithColor(displayMessage, java.awt.Color.MAGENTA));
         } else {
             // Fallback to console output
-            System.out.println(TextFX.colorize(displayMessage, Color.MAGENTA)); // Use magenta for private messages
+            System.out.println(TextFX.TextColorize(displayMessage, TextFX.TextColor.MAGENTA)); // Use magenta for
+                                                                                               // private
+            // messages
         }
     }
 
     private void processDisconnect(long clientId, String clientName) {
-        System.out.println(
-                TextFX.colorize(String.format("*%s disconnected*",
-                        clientId == myData.getClientId() ? "You" : clientName),
-                        Color.RED));
+        String name = clientId == myData.getClientId() ? "You" : knownClients.getOrDefault(clientId, new ClientData()).getClientName();
+        System.out.println(TextFX.TextColorize(String.format("*%s disconnected*", name), TextFX.TextColor.RED));
         if (clientId == myData.getClientId()) {
             closeServerConnection();
         }
     }
+    
 
     private void processClientData(long clientId, String clientName) {
         if (myData.getClientId() == ClientData.DEFAULT_CLIENT_ID) {
@@ -673,37 +678,36 @@ public enum Client {
 
     // kr553 10/20/2024
     private void processMessage(long clientId, String message) {
+        System.out.println("Message received from server: clientId = " + clientId + ", message = " + message);
         String name;
         if (clientId == ServerThread.DEFAULT_CLIENT_ID) {
-            name = ""; // Or set to "Server" if you prefer
+            name = "Server";
         } else {
             name = knownClients.containsKey(clientId) ? knownClients.get(clientId).getClientName() : "Unknown";
         }
     
-        String formattedMessage;
-        if (name.isEmpty()) {
-            formattedMessage = TextFX.formatText(message);
-        } else {
-            formattedMessage = String.format("%s: %s", name, TextFX.formatText(message));
-        }
+        // Format the sender's name and message
+        String formattedName = "<b>" + TextFX.escapeHTML(name) + ":</b> ";
+        String formattedMessage = formattedName + TextFX.formatText(message);
     
-        // Determine the color for the message
+        System.out.println("Formatted message for UI: " + formattedMessage);
         final java.awt.Color messageColor;
         if (name.equalsIgnoreCase(myData.getClientName())) {
-            messageColor = java.awt.Color.BLUE; // Blue for the current user's messages
+            messageColor = java.awt.Color.BLUE;
         } else if (message.contains("[Private]")) {
-            messageColor = java.awt.Color.MAGENTA; // Magenta for private messages
-        } else if (name.isEmpty()) {
-            messageColor = java.awt.Color.BLACK; // Black for system messages
+            messageColor = java.awt.Color.MAGENTA;
+        } else if (name.equals("Server")) {
+            messageColor = java.awt.Color.BLACK;
         } else {
-            messageColor = java.awt.Color.GREEN; // Green for other users' messages
+            messageColor = java.awt.Color.GREEN;
         }
     
-        // Update the chat history in the UI
         if (chatRoomPanel != null) {
-            SwingUtilities.invokeLater(() -> chatRoomPanel.appendChatMessageWithColor(formattedMessage, messageColor));
+            SwingUtilities.invokeLater(() -> {
+                chatRoomPanel.appendChatMessageWithColor(formattedMessage, messageColor);
+            });
         } else {
-            // Fallback to console output
+            System.out.println("chatRoomPanel is null. Falling back to console output.");
             System.out.println(formattedMessage);
         }
     }
