@@ -141,6 +141,7 @@ public class Room implements AutoCloseable {
     /**
      * Sends a private message between two users in the room.
      */
+    //kr553 11/23/2024
     protected synchronized void sendPrivateMessage(ServerThread sender, long targetClientId, String message) {
         if (!isRunning) {
             return;
