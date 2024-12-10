@@ -1,5 +1,11 @@
 package Project;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.net.Socket;
 import java.util.HashSet;
 import java.util.Objects;
@@ -66,7 +72,46 @@ public class ServerThread extends BaseServerThread {
 
     @Override
     protected void onInitialized() {
+        loadMuteList(); // Load the mute list for this client
+        info("Mute list initialized: " + mutedClientIds); // Log muted client IDs
         onInitializationComplete.accept(this); // Notify server that initialization is complete
+    }
+    
+
+    private void loadMuteList() {
+        File muteFile = new File(MUTE_FILE_DIR, clientName + ".txt");
+        if (muteFile.exists()) {
+            synchronized (mutedClientIds) {
+                try (BufferedReader reader = new BufferedReader(new FileReader(muteFile))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        long mutedId = Long.parseLong(line.trim());
+                        // Prevent self-muting during initialization
+                        if (mutedId != clientId) {
+                            mutedClientIds.add(mutedId);
+                        }
+                    }
+                } catch (IOException e) {
+                    info("Error reading mute file for " + clientName + ": " + e.getMessage());
+                }
+            }
+        }
+    }
+    
+
+    private void saveMuteList() {
+        synchronized (mutedClientIds) {
+            File muteFile = new File(MUTE_FILE_DIR, clientName + ".txt");
+            muteFile.getParentFile().mkdirs(); // Ensure directory exists
+            try (BufferedWriter writer = new BufferedWriter(new FileWriter(muteFile))) {
+                for (Long mutedId : mutedClientIds) {
+                    writer.write(mutedId.toString());
+                    writer.newLine();
+                }
+            } catch (IOException e) {
+                info("Error writing mute file for " + clientName + ": " + e.getMessage());
+            }
+        }
     }
 
     @Override
@@ -103,6 +148,8 @@ public class ServerThread extends BaseServerThread {
         }
     }
 
+    private static final String MUTE_FILE_DIR = "mutes"; // Directory for mute files
+
     // handle received message from the Client
     // kr553 10/20/2024
     @Override
@@ -117,7 +164,12 @@ public class ServerThread extends BaseServerThread {
                     processPrivateMessagePayload((PrivateMessagePayload) payload);
                     break;
                 case MESSAGE:
-                    currentRoom.sendMessage(this, payload.getMessage());
+                    info(String.format("Processing MESSAGE payload: %s", payload.getMessage()));
+                    if (currentRoom != null) {
+                        currentRoom.sendMessage(this, payload.getMessage());
+                    } else {
+                        info("No room assigned for MESSAGE payload.");
+                    }
                     break;
                 case ROOM_CREATE:
                     currentRoom.handleCreateRoom(this, payload.getMessage());
@@ -150,19 +202,42 @@ public class ServerThread extends BaseServerThread {
         }
     }
 
-    // Muting functionality
     private void handleMute(Payload payload) {
         long targetClientId = payload.getTargetClientId();
-        mutedClientIds.add(targetClientId);
-        // Optionally, send confirmation to the client
-        sendMessage("You have muted " + payload.getMessage());
+        if (targetClientId == clientId) {
+            sendMessage("You cannot mute yourself.");
+            return;
+        }
+    
+        if (mutedClientIds.add(targetClientId)) { // Only add if not already muted
+            saveMuteList(); // Save updated mute list
+            sendMessage("You have muted " + payload.getMessage());
+    
+            // Notify the muted client
+            ServerThread targetClient = Server.INSTANCE.getClientById(targetClientId);
+            if (targetClient != null) {
+                targetClient.sendMessage(clientName + " has muted you.");
+            }
+        }
     }
+    
 
     private void handleUnmute(Payload payload) {
         long targetClientId = payload.getTargetClientId();
-        mutedClientIds.remove(targetClientId);
-        // Optionally, send confirmation to the client
-        sendMessage("You have unmuted " + payload.getMessage());
+        if (mutedClientIds.remove(targetClientId)) { // Only remove if already muted
+            saveMuteList(); // Save updated mute list
+            sendMessage("You have unmuted " + payload.getMessage());
+
+            // Notify the unmuted client
+            ServerThread targetClient = Server.INSTANCE.getClientById(targetClientId);
+            if (targetClient != null) {
+                targetClient.sendMessage(clientName + " has unmuted you.");
+            }
+        }
+    }
+
+    private ServerThread getClientById(long clientId) {
+        return Server.INSTANCE.getClientById(clientId);
     }
 
     public boolean isMuted(long clientId) {

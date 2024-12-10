@@ -5,7 +5,9 @@ import java.awt.event.*;
 import javax.swing.*;
 import javax.swing.text.*;
 import javax.swing.text.html.HTMLEditorKit;
-import java.io.IOException;
+import java.io.*;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import javax.swing.text.html.HTMLDocument;
 
 public class ChatRoomPanel extends JPanel {
@@ -14,6 +16,7 @@ public class ChatRoomPanel extends JPanel {
     private JScrollPane chatScrollPane;
     private JTextField messageInputField;
     private JButton sendButton;
+    private JButton exportChatButton; // Button for exporting chat history
     private JList<String> userList;
     private DefaultListModel<String> userListModel;
     private Client client;
@@ -45,8 +48,14 @@ public class ChatRoomPanel extends JPanel {
         messageInputField = new JTextField();
         sendButton = new JButton("Send");
 
+        // Export chat button
+        exportChatButton = new JButton("Export Chat");
+        exportChatButton.addActionListener(e -> exportChatHistory());
+
+        // Adding components to message panel
         messagePanel.add(messageInputField, BorderLayout.CENTER);
         messagePanel.add(sendButton, BorderLayout.EAST);
+        messagePanel.add(exportChatButton, BorderLayout.WEST); // Add export button to UI
 
         // Add components to the main panel
         add(chatScrollPane, BorderLayout.CENTER);
@@ -88,14 +97,51 @@ public class ChatRoomPanel extends JPanel {
         });
     }
 
-    // Method to update user list
     public void updateUserList(java.util.List<String> users) {
         SwingUtilities.invokeLater(() -> {
             userListModel.clear();
             for (String user : users) {
-                userListModel.addElement(user);
+                if (user.equals(client.getClientName())) {
+                    userListModel.addElement("<html><b>" + user + "</b></html>"); // Highlight current user
+                } else {
+                    userListModel.addElement(user);
+                }
             }
         });
+    }
+    
+    
+    // Method to export chat history
+    private void exportChatHistory() {
+        try {
+            // Extract content from chatHistoryPane
+            HTMLEditorKit kit = (HTMLEditorKit) chatHistoryPane.getEditorKit();
+            HTMLDocument doc = (HTMLDocument) chatHistoryPane.getDocument();
+            StringWriter writer = new StringWriter();
+            kit.write(writer, doc, 0, doc.getLength());
+            String htmlContent = writer.toString();
+
+            // Convert HTML to plain text
+            String plainText = htmlContent.replaceAll("<[^>]*>", ""); // Strip HTML tags
+
+            // Create unique filename
+            String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+            String fileName = "chat_history_" + timestamp + ".txt";
+
+            // Write to file
+            File file = new File(fileName);
+            try (BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(file))) {
+                bufferedWriter.write(plainText);
+            }
+
+            // Notify user
+            JOptionPane.showMessageDialog(this, "Chat history saved to " + file.getAbsolutePath(), 
+                    "Export Successful", JOptionPane.INFORMATION_MESSAGE);
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this, "Error exporting chat history: " + e.getMessage(), 
+                    "Export Failed", JOptionPane.ERROR_MESSAGE);
+            e.printStackTrace();
+        }
     }
 
     // For testing purposes, create a main method to display the panel
@@ -112,12 +158,5 @@ public class ChatRoomPanel extends JPanel {
         chatRoomPanel.appendChatMessageWithColor("This is a normal message.", Color.BLACK);
         chatRoomPanel.appendChatMessageWithColor("This is a message from you!", Color.BLUE);
         chatRoomPanel.appendChatMessageWithColor("[Private] This is a private message.", Color.MAGENTA);
-
-        // Example test for formatted messages
-        chatRoomPanel.appendChatMessageWithColor("**This is bold text**", Color.BLACK);
-        chatRoomPanel.appendChatMessageWithColor("*This is italic text*", Color.BLACK);
-        chatRoomPanel.appendChatMessageWithColor("_This is underlined text_", Color.BLACK);
-        chatRoomPanel.appendChatMessageWithColor("#rThis is red text r#", Color.BLACK);
-        chatRoomPanel.appendChatMessageWithColor("**_#bThis is bold, italic, underlined, blue text b#_**", Color.BLACK);
     }
 }

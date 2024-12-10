@@ -1,6 +1,8 @@
 package Project;
 
+import java.util.HashSet;
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class Room implements AutoCloseable {
@@ -82,15 +84,16 @@ public class Room implements AutoCloseable {
         }
         clientsInRoom.put(client.getClientId(), client);
         client.setCurrentRoom(this);
-
-        // Notify clients of someone joining
+    
+        // Notify existing clients of the new client joining
         sendRoomStatus(client.getClientId(), client.getClientName(), true);
-        // Sync room state to joiner
+        
+        // Sync the new client with the current room's client list
         syncRoomList(client);
-
+    
         info(String.format("%s[%s] joined the Room[%s]", client.getClientName(), client.getClientId(), getName()));
     }
-
+    
     // kr553 10/21/2024
     protected synchronized void removedClient(ServerThread client) {
         if (!isRunning) { // Block action if Room isn't running
@@ -108,7 +111,8 @@ public class Room implements AutoCloseable {
     /**
      * Takes a ServerThread and removes them from the Server.
      * Adding the synchronized keyword ensures that only one thread can execute
-     * these methods at a time, preventing concurrent modification issues and ensuring thread safety.
+     * these methods at a time, preventing concurrent modification issues and
+     * ensuring thread safety.
      * 
      * @param client The client to disconnect.
      */
@@ -126,6 +130,10 @@ public class Room implements AutoCloseable {
         info(String.format("%s[%s] disconnected", client.getClientName(), id));
     }
 
+    public Set<ServerThread> getClients() {
+        return new HashSet<>(clientsInRoom.values()); // Return a thread-safe copy of the clients
+    }
+
     protected synchronized void disconnectAll() {
         info("Disconnect All triggered");
         if (!isRunning) {
@@ -141,7 +149,7 @@ public class Room implements AutoCloseable {
     /**
      * Sends a private message between two users in the room.
      */
-    //kr553 11/23/2024
+    // kr553 11/23/2024
     protected synchronized void sendPrivateMessage(ServerThread sender, long targetClientId, String message) {
         if (!isRunning) {
             return;
@@ -169,7 +177,8 @@ public class Room implements AutoCloseable {
             }
 
             // Log the private message (optional)
-            info(String.format("Private message from %s to %s: %s", sender.getClientName(), targetClient.getClientName(), message));
+            info(String.format("Private message from %s to %s: %s", sender.getClientName(),
+                    targetClient.getClientName(), message));
         } else {
             // Target client not found in the room
             // Optionally, send an error message back to the sender
@@ -227,7 +236,16 @@ public class Room implements AutoCloseable {
                 client.sendClientSync(clientInRoom.getClientId(), clientInRoom.getClientName());
             }
         });
+    
+        // Send the joining client's details to existing clients
+        clientsInRoom.values().forEach(clientInRoom -> {
+            if (clientInRoom.getClientId() != client.getClientId()) {
+                clientInRoom.sendClientSync(client.getClientId(), client.getClientName());
+            }
+        });
     }
+    
+    
 
     /**
      * Syncs room status of one client to all connected clients.
@@ -253,26 +271,28 @@ public class Room implements AutoCloseable {
         if (!isRunning) {
             return;
         }
-
+    
         String formattedMessage = TextFX.formatText(message);
         long senderId = sender == null ? ServerThread.DEFAULT_CLIENT_ID : sender.getClientId();
-
+    
         for (ServerThread client : clientsInRoom.values()) {
-            if (client.isMuted(senderId)) {
-                continue; // Skip sending the message to this client
+            // Skip muted check if the sender and recipient are the same
+            if (client.getClientId() != senderId && client.isMuted(senderId)) {
+                info(String.format("Message skipped for muted client [%s]", client.getClientName()));
+                continue;
             }
-
+    
             boolean messageSent = client.sendMessage(senderId, formattedMessage);
-
+    
             if (!messageSent) {
-                info(String.format("Removing disconnected client[%s] from list", client.getClientId()));
+                info(String.format("Removing disconnected client[%s] from list", client.getClientName()));
                 disconnect(client);
             }
         }
     }
-
-
-
+    
+    
+    
     // End send data to client(s)
 
     // Receive data from ServerThread

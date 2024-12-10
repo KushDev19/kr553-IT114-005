@@ -84,6 +84,19 @@ public enum Server {
         joinRoom(Room.LOBBY, sClient);
     }
 
+    protected ServerThread getClientById(long clientId) {
+        for (Room room : rooms.values()) { // Iterate through all rooms
+            for (ServerThread client : room.getClients()) { // Iterate through clients in each room
+                if (client.getClientId() == clientId) {
+                    return client; // Return the matching client
+                }
+            }
+        }
+        return null; // Client not found
+    }
+    
+    
+
     /**
      * Attempts to create a new Room and add it to the tracked rooms collection
      * 
