@@ -1,6 +1,7 @@
 package Project;
 
 import java.io.Serializable;
+import java.util.List;
 
 public class Payload implements Serializable {
     private PayloadType payloadType; // The type of the payload
@@ -9,6 +10,7 @@ public class Payload implements Serializable {
     private String message;          // Message content
     private String senderName;       // Name of the sender
     private long timestamp;          // Unix timestamp in milliseconds
+    private List<String> mutedUsers; // List of muted users
 
     // Getter and Setter for payloadType
     public PayloadType getPayloadType() {
@@ -64,11 +66,20 @@ public class Payload implements Serializable {
         this.timestamp = timestamp;
     }
 
+    // Getter and Setter for mutedUsers
+    public List<String> getMutedUsers() {
+        return mutedUsers;
+    }
+
+    public void setMutedUsers(List<String> mutedUsers) {
+        this.mutedUsers = mutedUsers;
+    }
+
     @Override
     public String toString() {
         return String.format(
-            "Payload [Type: %s, Client ID: %s, Sender: %s, Target: %s, Timestamp: %s, Message: %s]",
-            getPayloadType(), getClientId(), getSenderName(), getTargetClientId(), getTimestamp(), getMessage()
+            "Payload [Type: %s, Client ID: %s, Sender: %s, Target: %s, Timestamp: %s, Message: %s, Muted Users: %s]",
+            getPayloadType(), getClientId(), getSenderName(), getTargetClientId(), getTimestamp(), getMessage(), getMutedUsers()
         );
     }
 }

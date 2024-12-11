@@ -72,11 +72,29 @@ public class ServerThread extends BaseServerThread {
 
     @Override
     protected void onInitialized() {
-        loadMuteList(); // Load the mute list for this client
-        info("Mute list initialized: " + mutedClientIds); // Log muted client IDs
-        onInitializationComplete.accept(this); // Notify server that initialization is complete
+        mutedClientIds.clear(); // Clear the muted list to reset for this client
+        loadMuteList(); // Reload the mute list from the file, if exists
+        info("Mute list initialized: " + mutedClientIds);
+        onInitializationComplete.accept(this);
+
+        sendMutedUsers(); // Send the updated mute list to the client
     }
-    
+
+    //kr553 12/11/2024
+    public void sendMutedUsers() {
+        Payload payload = new Payload();
+        payload.setPayloadType(PayloadType.MUTE_LIST);
+        synchronized (mutedClientIds) {
+            // Convert mutedClientIds to corresponding usernames
+            payload.setMutedUsers(
+                    mutedClientIds.stream()
+                            .map(id -> Server.INSTANCE.getClientById(id))
+                            .filter(Objects::nonNull)
+                            .map(ServerThread::getClientName)
+                            .toList());
+        }
+        send(payload); // Send the payload to the client
+    }
 
     private void loadMuteList() {
         File muteFile = new File(MUTE_FILE_DIR, clientName + ".txt");
@@ -97,7 +115,6 @@ public class ServerThread extends BaseServerThread {
             }
         }
     }
-    
 
     private void saveMuteList() {
         synchronized (mutedClientIds) {
@@ -127,8 +144,17 @@ public class ServerThread extends BaseServerThread {
 
     @Override
     protected void disconnect() {
-        // sendDisconnect(clientId, clientName);
+        saveMuteList(); // Save the current mute list to persist data
+        updateOtherClientsMutedLists(clientId); // Notify others to remove this client from their mute lists
         super.disconnect();
+    }
+
+    public Set<Long> getMutedClientIds() {
+        return new HashSet<>(mutedClientIds); // Return a copy for thread safety
+    }
+
+    public void clearMutedClientIds() {
+        mutedClientIds.clear();
     }
 
     // kr553 11/9/2024
@@ -137,6 +163,15 @@ public class ServerThread extends BaseServerThread {
             currentRoom.processRollCommand(this, payload);
         } else {
             System.out.println("No room assigned to process roll command.");
+        }
+    }
+
+    private void updateOtherClientsMutedLists(long disconnectedClientId) {
+        for (ServerThread client : Server.INSTANCE.getAllClients()) {
+            if (client.isMuted(disconnectedClientId)) {
+                client.mutedClientIds.remove(disconnectedClientId);
+                client.sendMutedUsers(); // Send updated mute list
+            }
         }
     }
 
@@ -202,37 +237,53 @@ public class ServerThread extends BaseServerThread {
         }
     }
 
+    // kr553 12/11/2024
     private void handleMute(Payload payload) {
         long targetClientId = payload.getTargetClientId();
         if (targetClientId == clientId) {
             sendMessage("You cannot mute yourself.");
             return;
         }
-    
-        if (mutedClientIds.add(targetClientId)) { // Only add if not already muted
+
+        if (mutedClientIds.contains(targetClientId)) { // Check if already muted
+            sendMessage("You have already muted " + payload.getMessage() + ".");
+            return;
+        }
+
+        if (mutedClientIds.add(targetClientId)) { // Add to the mute list if not already muted
             saveMuteList(); // Save updated mute list
-            sendMessage("You have muted " + payload.getMessage());
-    
+            sendMessage("You have muted " + payload.getMessage() + ".");
+
             // Notify the muted client
             ServerThread targetClient = Server.INSTANCE.getClientById(targetClientId);
             if (targetClient != null) {
                 targetClient.sendMessage(clientName + " has muted you.");
             }
+
+            // Send updated mute list to the client
+            sendMutedUsers();
         }
     }
-    
 
     private void handleUnmute(Payload payload) {
         long targetClientId = payload.getTargetClientId();
-        if (mutedClientIds.remove(targetClientId)) { // Only remove if already muted
+        if (!mutedClientIds.contains(targetClientId)) { // Check if not muted
+            sendMessage("You have not muted " + payload.getMessage() + ".");
+            return;
+        }
+
+        if (mutedClientIds.remove(targetClientId)) { // Remove from the mute list if muted
             saveMuteList(); // Save updated mute list
-            sendMessage("You have unmuted " + payload.getMessage());
+            sendMessage("You have unmuted " + payload.getMessage() + ".");
 
             // Notify the unmuted client
             ServerThread targetClient = Server.INSTANCE.getClientById(targetClientId);
             if (targetClient != null) {
                 targetClient.sendMessage(clientName + " has unmuted you.");
             }
+
+            // Send updated mute list to the client
+            sendMutedUsers();
         }
     }
 
@@ -268,7 +319,11 @@ public class ServerThread extends BaseServerThread {
         cp.setClientName(clientName);
         cp.setConnect(true);
         cp.setPayloadType(PayloadType.SYNC_CLIENT);
-        return send(cp);
+        send(cp);
+
+        // Send muted users list to the client
+        sendMutedUsers();
+        return true;
     }
 
     /**

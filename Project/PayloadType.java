@@ -12,5 +12,7 @@ public enum PayloadType {
     FLIP,          // new type for flip command
     PRIVATE_MESSAGE, // new type for private messages
     MUTE,           
-    UNMUTE
+    UNMUTE,
+    MUTE_LIST,
+    UNMUTE_LIST
 }

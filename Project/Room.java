@@ -75,36 +75,35 @@ public class Room implements AutoCloseable {
     }
 
     protected synchronized void addClient(ServerThread client) {
-        if (!isRunning) { // Block action if Room isn't running
+        if (!isRunning) {
             return;
         }
+
         if (clientsInRoom.containsKey(client.getClientId())) {
-            info("Attempting to add a client that already exists in the room");
+            info("Client already in room");
             return;
         }
+
         clientsInRoom.put(client.getClientId(), client);
         client.setCurrentRoom(this);
-    
-        // Notify existing clients of the new client joining
+
+        // Reset the muted list for the joining client
+        client.clearMutedClientIds();
+
+        // Notify existing clients and update the joining client's user list
         sendRoomStatus(client.getClientId(), client.getClientName(), true);
-        
-        // Sync the new client with the current room's client list
         syncRoomList(client);
-    
+
         info(String.format("%s[%s] joined the Room[%s]", client.getClientName(), client.getClientId(), getName()));
     }
-    
-    // kr553 10/21/2024
+
     protected synchronized void removedClient(ServerThread client) {
-        if (!isRunning) { // Block action if Room isn't running
+        if (!isRunning)
             return;
-        }
-        // Notify remaining clients of someone leaving
         sendRoomStatus(client.getClientId(), client.getClientName(), false);
         clientsInRoom.remove(client.getClientId());
 
-        info(String.format("%s[%s] left the room", client.getClientName(), client.getClientId(), getName()));
-
+        info(String.format("%s[%s] left Room[%s]", client.getClientName(), client.getClientId(), getName()));
         autoCleanup();
     }
 
@@ -231,21 +230,23 @@ public class Room implements AutoCloseable {
      * Syncs info of existing users in room with the client.
      */
     protected synchronized void syncRoomList(ServerThread client) {
+        // Sync existing users in room to the joining client
         clientsInRoom.values().forEach(clientInRoom -> {
             if (clientInRoom.getClientId() != client.getClientId()) {
                 client.sendClientSync(clientInRoom.getClientId(), clientInRoom.getClientName());
             }
         });
-    
+
         // Send the joining client's details to existing clients
         clientsInRoom.values().forEach(clientInRoom -> {
             if (clientInRoom.getClientId() != client.getClientId()) {
                 clientInRoom.sendClientSync(client.getClientId(), client.getClientName());
             }
         });
+
+        // Sync muted clients to the joining client
+        client.sendMutedUsers();
     }
-    
-    
 
     /**
      * Syncs room status of one client to all connected clients.
@@ -268,31 +269,28 @@ public class Room implements AutoCloseable {
      */
     // kr553 10/21/2024
     protected synchronized void sendMessage(ServerThread sender, String message) {
-        if (!isRunning) {
+        if (!isRunning)
             return;
-        }
-    
+
         String formattedMessage = TextFX.formatText(message);
         long senderId = sender == null ? ServerThread.DEFAULT_CLIENT_ID : sender.getClientId();
-    
+
         for (ServerThread client : clientsInRoom.values()) {
-            // Skip muted check if the sender and recipient are the same
-            if (client.getClientId() != senderId && client.isMuted(senderId)) {
+            // Skip if the client has muted the sender
+            if (sender != null && client.isMuted(senderId)) {
                 info(String.format("Message skipped for muted client [%s]", client.getClientName()));
                 continue;
             }
-    
+
             boolean messageSent = client.sendMessage(senderId, formattedMessage);
-    
+
             if (!messageSent) {
-                info(String.format("Removing disconnected client[%s] from list", client.getClientName()));
+                info(String.format("Removing disconnected client [%s]", client.getClientName()));
                 disconnect(client);
             }
         }
     }
-    
-    
-    
+
     // End send data to client(s)
 
     // Receive data from ServerThread

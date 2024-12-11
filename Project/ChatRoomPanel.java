@@ -7,8 +7,11 @@ import javax.swing.text.*;
 import javax.swing.text.html.HTMLEditorKit;
 import java.io.*;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import javax.swing.text.html.HTMLDocument;
+import java.util.HashSet;
+import java.util.Objects;
 
 public class ChatRoomPanel extends JPanel {
 
@@ -20,6 +23,7 @@ public class ChatRoomPanel extends JPanel {
     private JList<String> userList;
     private DefaultListModel<String> userListModel;
     private Client client;
+    private HashSet<String> mutedUsers = new HashSet<>();
 
     public ChatRoomPanel() {
         client = Client.INSTANCE;
@@ -99,18 +103,42 @@ public class ChatRoomPanel extends JPanel {
 
     public void updateUserList(java.util.List<String> users) {
         SwingUtilities.invokeLater(() -> {
-            userListModel.clear();
+            userListModel.clear(); // Clear the existing user list
             for (String user : users) {
-                if (user.equals(client.getClientName())) {
-                    userListModel.addElement("<html><b>" + user + "</b></html>"); // Highlight current user
+                if (mutedUsers.contains(user)) {
+                    // Add muted users with gray styling
+                    userListModel.addElement("<html><span style='color:gray;'>" + user + "</span></html>");
                 } else {
+                    // Add normal users
                     userListModel.addElement(user);
                 }
             }
         });
     }
-    
-    
+
+    private void sendMutedUsers() {
+        Payload payload = new Payload();
+        payload.setPayloadType(PayloadType.MUTE_LIST);
+        synchronized (mutedUsers) {
+            payload.setMutedUsers(new ArrayList<>(mutedUsers));
+        }
+        client.send(payload); // Delegating the send operation to the Client class
+    }
+
+    // method to update the muted users list
+    public void updateMutedUsers(HashSet<String> mutedUsers) {
+        this.mutedUsers = new HashSet<>(mutedUsers); // Update mutedUsers set for this client
+        SwingUtilities.invokeLater(() -> {
+            // Refresh the user list to reflect muted statuses
+            java.util.List<String> userList = new ArrayList<>();
+            for (int i = 0; i < userListModel.getSize(); i++) {
+                String element = userListModel.getElementAt(i).replaceAll("<[^>]*>", ""); // Strip HTML tags
+                userList.add(element);
+            }
+            updateUserList(userList); // Re-render the user list
+        });
+    }
+
     // Method to export chat history
     private void exportChatHistory() {
         try {
@@ -135,10 +163,10 @@ public class ChatRoomPanel extends JPanel {
             }
 
             // Notify user
-            JOptionPane.showMessageDialog(this, "Chat history saved to " + file.getAbsolutePath(), 
+            JOptionPane.showMessageDialog(this, "Chat history saved to " + file.getAbsolutePath(),
                     "Export Successful", JOptionPane.INFORMATION_MESSAGE);
         } catch (Exception e) {
-            JOptionPane.showMessageDialog(this, "Error exporting chat history: " + e.getMessage(), 
+            JOptionPane.showMessageDialog(this, "Error exporting chat history: " + e.getMessage(),
                     "Export Failed", JOptionPane.ERROR_MESSAGE);
             e.printStackTrace();
         }

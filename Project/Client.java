@@ -5,6 +5,7 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
 import java.net.UnknownHostException;
+import java.util.HashSet;
 import java.util.Scanner;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -43,6 +44,7 @@ public enum Client {
     private final String ROLL = "roll";
     private final String FLIP = "flip";
     private ChatRoomPanel chatRoomPanel;
+    private HashSet<String> mutedUsers = new HashSet<>();
 
     // needs to be private now that the enum logic is handling this
     private Client() {
@@ -52,6 +54,16 @@ public enum Client {
 
     public void setChatRoomPanel(ChatRoomPanel panel) {
         this.chatRoomPanel = panel;
+    }
+
+    private void processMutedUsers(java.util.List<String> mutedUsernames) {
+        mutedUsers.clear();
+        mutedUsers.addAll(mutedUsernames);
+
+        // Update the ChatRoomPanel UI with grayed-out muted users
+        if (chatRoomPanel != null) {
+            SwingUtilities.invokeLater(() -> chatRoomPanel.updateMutedUsers(new HashSet<>(mutedUsers)));
+        }
     }
 
     public void sendMessageToServer(String message) {
@@ -77,7 +89,7 @@ public enum Client {
         }
     }
 
-    //kr553 11/23/2024
+    // kr553 11/23/2024
     private void handlePrivateMessage(String message) {
         String[] parts = message.split("\\s+", 2);
         if (parts.length >= 1) {
@@ -444,11 +456,10 @@ public enum Client {
         p.setPayloadType(PayloadType.MESSAGE);
         p.setClientId(myData.getClientId());
         p.setMessage(message);
-    
+
         send(p);
         System.out.println(String.format("Sent message: %s", message));
     }
-    
 
     /**
      * Sends chosen client name after socket handshake
@@ -468,12 +479,16 @@ public enum Client {
      * 
      * @param p
      */
-    private void send(Payload p) {
+    public void send(Payload p) {
         try {
-            out.writeObject(p);
-            out.flush();
+            if (out != null) {
+                out.writeObject(p);
+                out.flush();
+            } else {
+                System.err.println("Output stream is not initialized.");
+            }
         } catch (IOException e) {
-            System.out.println(TextFX.TextColorize("Failed to send message to server.", TextFX.TextColor.RED));
+            System.err.println("Failed to send payload to server.");
             e.printStackTrace();
         }
     }
@@ -612,28 +627,29 @@ public enum Client {
     private void processPayload(Payload payload) {
         try {
             switch (payload.getPayloadType()) {
-                case PayloadType.CLIENT_ID: // get id assigned
+                case PayloadType.CLIENT_ID:
                     ConnectionPayload cp = (ConnectionPayload) payload;
                     processClientData(cp.getClientId(), cp.getClientName());
                     break;
                 case PayloadType.PRIVATE_MESSAGE:
                     processPrivateMessage(payload.getClientId(), payload.getMessage());
                     break;
-                case PayloadType.SYNC_CLIENT: // silent add
+                case PayloadType.SYNC_CLIENT:
                     cp = (ConnectionPayload) payload;
                     processClientSync(cp.getClientId(), cp.getClientName());
                     break;
-                case PayloadType.DISCONNECT: // remove a disconnected client (mostly for the specific message vs leaving
-                                             // a room)
+                case PayloadType.DISCONNECT:
                     cp = (ConnectionPayload) payload;
                     processDisconnect(cp.getClientId(), cp.getClientName());
-                    // note: we want this to cascade
-                case PayloadType.ROOM_JOIN: // add/remove client info from known clients
+                case PayloadType.ROOM_JOIN:
                     cp = (ConnectionPayload) payload;
                     processRoomAction(cp.getClientId(), cp.getClientName(), cp.getMessage(), cp.isConnect());
                     break;
-                case PayloadType.MESSAGE: // displays a received message
+                case PayloadType.MESSAGE:
                     processMessage(payload.getClientId(), payload.getMessage());
+                    break;
+                case PayloadType.MUTE_LIST:
+                    processMutedUsers(payload.getMutedUsers());
                     break;
                 default:
                     break;
@@ -642,6 +658,10 @@ public enum Client {
             System.out.println(TextFX.TextColorize("Could not process Payload: " + payload, TextFX.TextColor.RED));
             e.printStackTrace();
         }
+    }
+
+    public HashSet<String> getMutedUsers() {
+        return new HashSet<>(mutedUsers);
     }
 
     // payload processors
@@ -664,13 +684,13 @@ public enum Client {
     }
 
     private void processDisconnect(long clientId, String clientName) {
-        String name = clientId == myData.getClientId() ? "You" : knownClients.getOrDefault(clientId, new ClientData()).getClientName();
+        String name = clientId == myData.getClientId() ? "You"
+                : knownClients.getOrDefault(clientId, new ClientData()).getClientName();
         System.out.println(TextFX.TextColorize(String.format("*%s disconnected*", name), TextFX.TextColor.RED));
         if (clientId == myData.getClientId()) {
             closeServerConnection();
         }
     }
-    
 
     private void processClientData(long clientId, String clientName) {
         if (myData.getClientId() == ClientData.DEFAULT_CLIENT_ID) {
@@ -682,17 +702,17 @@ public enum Client {
 
     // kr553 10/20/2024
     private void processMessage(long clientId, String message) {
-        String name = (clientId == ServerThread.DEFAULT_CLIENT_ID) 
-                      ? "Server" 
-                      : knownClients.getOrDefault(clientId, new ClientData()).getClientName();
-    
+        String name = (clientId == ServerThread.DEFAULT_CLIENT_ID)
+                ? "Server"
+                : knownClients.getOrDefault(clientId, new ClientData()).getClientName();
+
         String formattedName = "<b>" + TextFX.escapeHTML(name) + ":</b> ";
         String formattedMessage = formattedName + TextFX.formatText(message);
-    
+
         final java.awt.Color messageColor = name.equalsIgnoreCase(myData.getClientName())
                 ? java.awt.Color.BLUE
                 : java.awt.Color.GREEN;
-    
+
         SwingUtilities.invokeLater(() -> {
             if (chatRoomPanel != null) {
                 chatRoomPanel.appendChatMessageWithColor(formattedMessage, messageColor);
@@ -701,12 +721,9 @@ public enum Client {
                 System.out.println(formattedMessage);
             }
         });
-    
+
         System.out.println(String.format("Processed message from [%s]: %s", name, message));
     }
-    
-    
-    
 
     private void processClientSync(long clientId, String clientName) {
         if (!knownClients.containsKey(clientId)) {
@@ -715,8 +732,8 @@ public enum Client {
             cd.setClientName(clientName);
             knownClients.put(clientId, cd);
         }
-    
-        // Update the user list in the ChatRoomPanel UI
+
+        // Update the user list and factor in muted users
         if (chatRoomPanel != null) {
             SwingUtilities.invokeLater(() -> {
                 java.util.List<String> userNames = new java.util.ArrayList<>();
@@ -727,24 +744,23 @@ public enum Client {
             });
         }
     }
-    
+
     public String getClientName() {
         return myData != null ? myData.getClientName() : "Unknown";
     }
-    
 
     private void processRoomAction(long clientId, String clientName, String message, boolean isJoin) {
         if (clientName == null || clientName.isEmpty()) {
             clientName = "Unknown"; // Fallback for null/empty names
         }
-    
+
         if (isJoin && !knownClients.containsKey(clientId)) {
             ClientData cd = new ClientData();
             cd.setClientId(clientId);
             cd.setClientName(clientName);
             knownClients.put(clientId, cd);
             String joinMessage = String.format("*%s[%s] joined the Room %s*", clientName, clientId, message);
-    
+
             // Append the join message to chat history
             if (chatRoomPanel != null) {
                 SwingUtilities
@@ -756,7 +772,7 @@ public enum Client {
             ClientData removed = knownClients.remove(clientId);
             if (removed != null) {
                 String leaveMessage = String.format("*%s[%s] left the Room %s*", clientName, clientId, message);
-    
+
                 // Append the leave message to chat history
                 if (chatRoomPanel != null) {
                     SwingUtilities.invokeLater(
@@ -771,11 +787,11 @@ public enum Client {
                 updateUserListInUI(); // Ensure the UI is also updated
             }
         }
-    
+
         // Update the user list in the UI
         updateUserListInUI();
     }
-    
+
     private void updateUserListInUI() {
         if (chatRoomPanel != null) {
             java.util.List<String> userNames = new java.util.ArrayList<>();
@@ -785,7 +801,6 @@ public enum Client {
             SwingUtilities.invokeLater(() -> chatRoomPanel.updateUserList(userNames));
         }
     }
-    
 
     // end payload processors
 }
